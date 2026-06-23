@@ -22,7 +22,8 @@ export default function NewsletterForm() {
           <div className="relative w-full h-[420px]">
   <Image
     src="/images/moldnews.png"
-    alt="MMT Newsletter"
+    alt="TOOLING
+     Newsletter"
     fill
     className="object-contain"
     sizes="(max-width: 1024px) 100vw, 360px"
@@ -34,7 +35,7 @@ export default function NewsletterForm() {
         {/* FORM */}
         <div>
           <h2 className="text-[32px] font-bold text-[#003B5C] mb-4">
-            Subscribe to MMT Newsletters
+            Subscribe to Tooling Newsletters
           </h2>
 
           <p className="text-gray-600 mb-8">

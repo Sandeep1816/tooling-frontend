@@ -73,7 +73,7 @@ export default async function TopicsPage() {
     "Manage",
     "Marketing",
     "Medical",
-    "MMT25",
+    "Tooling25",
     "ToolingComponents",
     "ToolingMaterials",
     "Molding Equipment",

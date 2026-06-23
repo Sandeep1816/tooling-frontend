@@ -247,7 +247,17 @@ export default async function Home() {
     { cache: "no-store" }
   )
 
-  const bannerData = await bannerRes.json()
+ const bannerText = await bannerRes.text()
+
+console.log("Banner Response:", bannerText)
+
+let bannerData = null
+
+try {
+  bannerData = JSON.parse(bannerText)
+} catch (err) {
+  console.error("Invalid JSON:", bannerText)
+}
 
   const banner =
     Array.isArray(bannerData) && bannerData.length > 0

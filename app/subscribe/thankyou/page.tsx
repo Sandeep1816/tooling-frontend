@@ -23,7 +23,7 @@ export default function MMTThankYouPage() {
         </p>
 
         <p className="text-gray-600 leading-relaxed mb-8">
-          Thank you for subscribing to MMT. You’ll now receive industry insights,  
+          Thank you for subscribing to Tooling. You’ll now receive industry insights,  
           tooling design news, machining techniques, and much more — straight to your inbox.
         </p>
 

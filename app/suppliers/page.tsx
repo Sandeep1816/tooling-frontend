@@ -129,7 +129,7 @@ export default function SuppliersPage() {
     <div className="min-h-screen">
       <div className="max-w-[1400px] mx-auto px-4 md:px-6 pt-0 pb-4 md:py-6">
 
-        {/* MOBILE FILTER BUTTON */}
+        {/* MOBILE FILTER BUTTON resgg*/}
         <button
           onClick={() => setShowFilters(true)}
           className="lg:hidden fixed bottom-6 right-6 z-40 bg-[#0b3954] text-white p-4 rounded-full shadow-lg flex items-center gap-2 hover:bg-[#0a2f42] transition-colors"

@@ -147,7 +147,7 @@ export default function SuppliersPage() {
             </div>
           </aside>
 
-          {/* LEFT FILTERS — MOBILE MODAL */}
+          {/* LEFT FILTERS — MOBILE MODAL  .*/}
           {showFilters && (
             <>
               <div

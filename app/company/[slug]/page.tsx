@@ -94,16 +94,16 @@ export default function CompanyProfilePage(props: {
 
           <div className="p-6 flex gap-6">
            <div className="relative w-28 h-28 -mt-16">
-  <Image
-    src={
-      company.logoUrl ||
-      "https://ui-avatars.com/api/?name=Company"
-    }
-    alt={company.name}
-    fill
-    className="rounded-lg bg-white border object-contain"
-    sizes="112px"
-  />
+ <Image
+  src={
+    company.logoUrl ||
+    "https://ui-avatars.com/api/?name=Company"
+  }
+  alt={company?.name ? `${company.name} logo` : "Company logo"}
+  fill
+  className="rounded-lg bg-white border object-contain"
+  sizes="112px"
+/>
 </div>
 
             <div className="flex-1">
@@ -180,13 +180,13 @@ export default function CompanyProfilePage(props: {
         <div className="bg-white rounded-lg p-6 shadow-sm">
           <h2 className="font-semibold mb-4">Jobs</h2>
 
-          {company.jobs.length === 0 ? (
+          {(company.jobs ?? []).length === 0 ? (
             <p className="text-sm text-gray-500">
               No active jobs at the moment.
             </p>
           ) : (
             <div className="space-y-4">
-              {company.jobs.map((job) => (
+              {(company.jobs ?? []).map((job) => (
                 <Link
                   key={job.id}
                   href={`/jobs/${job.slug}`}

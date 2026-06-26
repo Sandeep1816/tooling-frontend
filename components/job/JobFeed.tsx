@@ -11,7 +11,7 @@ type Job = {
   description: string
   location: string
   employmentType?: string
-  company?: {
+  Company?: {
     name: string
     slug: string
   }
@@ -70,9 +70,16 @@ export default function JobFeed({ isPublic = false }: { isPublic?: boolean }) {
               <Briefcase size={18} className="text-blue-600" />
             </div>
             <div>
-              <p className="font-semibold text-sm">
-                {job.company?.name || "Company"}
-              </p>
+             <p
+  onClick={() => {
+    if (job.Company?.slug) {
+      router.push(`/company/${job.Company.slug}`)
+    }
+  }}
+  className="font-semibold text-sm cursor-pointer text-blue-600 hover:underline"
+>
+  {job.Company?.name || "Company"}
+</p>
               <p className="text-xs text-gray-500">
                 {job.employmentType || "Full-time"}
               </p>

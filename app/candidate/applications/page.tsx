@@ -9,11 +9,11 @@ type Application = {
   id: number
   status: string
   createdAt: string
-  job: {
+  Job: {
     title: string
     slug: string
     location: string
-    company: {
+    Company: {
       name: string
       slug: string
     }
@@ -80,25 +80,25 @@ export default function MyApplicationsPage() {
             >
               {/* HEADER */}
               <Link
-                href={`/company/${app.job.company.slug}`}
+               href={`/company/${app.Job?.Company?.slug ?? ""}`}
                 className="font-semibold text-sm text-blue-600 hover:underline"
               >
-                {app.job.company.name}
+               {app.Job?.Company?.name ?? "Unknown Company"}
               </Link>
 
               {/* TITLE */}
               <Link
-                href={`/jobs/${app.job.slug}`}
+             href={`/jobs/${app.Job?.slug ?? ""}`}
                 className="block text-lg font-medium mt-1 hover:underline"
               >
-                {app.job.title}
+                {app.Job?.title}
               </Link>
 
               {/* META */}
               <div className="flex flex-wrap gap-4 text-xs text-gray-500 mt-2">
                 <span className="flex items-center gap-1">
                   <MapPin size={12} />
-                  {app.job.location}
+                  {app.Job?.location}
                 </span>
 
                 <span className="flex items-center gap-1">

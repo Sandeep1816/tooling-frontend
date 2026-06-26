@@ -64,7 +64,7 @@ export default function AddDirectoryPage() {
   useEffect(() => {
     async function fetchIndustries() {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/industries`
+        `${process.env.NEXT_PUBLIC_API_URL}/api/industries`
       )
       const data = await res.json()
       const list = Array.isArray(data) ? data : data.data ?? []
@@ -86,7 +86,7 @@ export default function AddDirectoryPage() {
     setFieldValue("industryId", "")
 
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/admin/industries/${id}/children`
+      `${process.env.NEXT_PUBLIC_API_URL}/api/industries/${id}/children`
     )
     const children = await res.json()
 

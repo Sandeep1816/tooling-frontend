@@ -14,7 +14,7 @@ export default function AdminMagazinesPage() {
   const [showIssueForm, setShowIssueForm] = useState(false) // ✅ NEW STATE
 
 
-   useEffect(() => {
+useEffect(() => {
   const token = localStorage.getItem("token")
 
   async function fetchData() {
@@ -26,19 +26,67 @@ export default function AdminMagazinesPage() {
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines/authors`),
         fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines/cover-stories`),
       ])
+      // ✅ LOGS MUST BE HERE — BEFORE .json()
+console.log("=== API URL ===", process.env.NEXT_PUBLIC_API_URL)
+console.log("mag:", magRes.status, magRes.url)
+console.log("auth:", authRes.status, authRes.url)
+console.log("cover:", coverRes.status, coverRes.url)
 
-      console.log("API URL:", process.env.NEXT_PUBLIC_API_URL)
-      console.log("magRes", magRes.status, magRes.url)
-      console.log("authRes", authRes.status, authRes.url)
-      console.log("coverRes", coverRes.status, coverRes.url)
+const magText = await magRes.clone().text()
+const authText = await authRes.clone().text()
+const coverText = await coverRes.clone().text()
+console.log("mag body:", magText.slice(0, 300))
+console.log("auth body:", authText.slice(0, 300))
+console.log("cover body:", coverText.slice(0, 300))
 
-      const magsText = await magRes.text()
-      const authsText = await authRes.text()
-      const coversText = await coverRes.text()
 
-      console.log("MAGS:", magsText)
-      console.log("AUTHS:", authsText)
-      console.log("COVERS:", coversText)
+console.log({
+  magazine: {
+    status: magRes.status,
+    ok: magRes.ok,
+    url: magRes.url,
+  },
+  authors: {
+    status: authRes.status,
+    ok: authRes.ok,
+    url: authRes.url,
+  },
+  coverStories: {
+    status: coverRes.status,
+    ok: coverRes.ok,
+    url: coverRes.url,
+  },
+})
+
+if (!magRes.ok) {
+  const body = await magRes.text()
+  console.error("Magazine API:", body)
+  return
+}
+
+if (!authRes.ok) {
+  const body = await authRes.text()
+  console.error("Authors API:", body)
+  return
+}
+
+if (!coverRes.ok) {
+  const body = await coverRes.text()
+  console.error("Cover Stories API:", body)
+  return
+}
+
+
+      const [mags, auths, covers] = await Promise.all([
+        magRes.json(),
+        authRes.json(),
+        coverRes.json(),
+      ])
+        
+      setMagazines(mags)
+      setAuthors(auths)
+      setCoverStories(covers)
+
     } catch (error) {
       console.error("Fetch error:", error)
     } finally {
@@ -149,11 +197,11 @@ export default function AdminMagazinesPage() {
                 <h3 className="text-lg font-semibold">{m.title}</h3>
 
                 <p className="text-sm text-gray-600">
-                  Author: {m.author?.name || "—"}
+                  Author: {m.MagazineAuthor?.name || "—"}
                 </p>
 
                 <p className="text-sm text-gray-600">
-                  Cover Story: {m.coverStory?.title || "—"}
+                  Cover Story: {m.CoverStory?.title || "—"}
                 </p>
 
                 <div className="flex gap-4 pt-3">

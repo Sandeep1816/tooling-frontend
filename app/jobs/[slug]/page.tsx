@@ -26,6 +26,14 @@ export default function JobDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saved, setSaved] = useState(false)
   const [showApplyForm, setShowApplyForm] = useState(false)
+  const [user, setUser] = useState<any>(null) // Added user state
+
+  useEffect(() => {
+    const storedUser = localStorage.getItem("user")
+    if (storedUser) {
+      setUser(JSON.parse(storedUser))
+    }
+  }, [])
 
   useEffect(() => {
     if (!slug) return
@@ -215,17 +223,21 @@ export default function JobDetailPage() {
   </div>
 ) : (
   <>
-    <button
-      onClick={handleApply}
-      className="bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-sm font-semibold px-7 py-2.5 rounded-full transition-all duration-150 shadow-[0_2px_8px_rgba(37,99,235,0.35)]"
-    >
-      Apply for this position
-    </button>
+    {user?.role === "candidate" && (
+      <>
+        <button
+          onClick={handleApply}
+          className="bg-blue-600 hover:bg-blue-700 active:scale-[0.98] text-white text-sm font-semibold px-7 py-2.5 rounded-full transition-all duration-150 shadow-[0_2px_8px_rgba(37,99,235,0.35)]"
+        >
+          Apply for this position
+        </button>
 
-    {showApplyForm && (
-      <div className="mt-6 border-t pt-6">
-        <ApplySection jobId={job.id} />
-      </div>
+        {showApplyForm && (
+          <div className="mt-6 border-t pt-6">
+            <ApplySection jobId={job.id} />
+          </div>
+        )}
+      </>
     )}
   </>
 )}

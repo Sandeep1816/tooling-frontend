@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { MapPin, Users, Eye } from "lucide-react"
+import { MapPin, Users, Eye, Pencil } from "lucide-react"
 import Link from "next/link"
 import { useRecruiterGuard } from "@/lib/useRecruiterGuard"
 
@@ -120,6 +120,14 @@ export default function MyJobsPage() {
                     className="flex items-center gap-1 text-sm text-blue-600"
                   >
                     <Eye size={14} /> View
+                  </Link>
+
+                  <Link
+                    href={`/recruiter/jobs/${job.id}/edit`}
+                    className="flex items-center gap-1 text-sm text-green-600"
+                  >
+                    <Pencil size={14} />
+                    Edit
                   </Link>
 
                   <Link

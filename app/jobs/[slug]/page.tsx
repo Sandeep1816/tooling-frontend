@@ -35,30 +35,46 @@ export default function JobDetailPage() {
     }
   }, [])
 
-  useEffect(() => {
-    if (!slug) return
+useEffect(() => {
+  if (!slug) return;
 
-    // increment views
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/jobs/${slug}/view`, {
-      method: "POST",
-    }).catch(() => {})
+  async function loadJob() {
+    try {
+      // increment first
+      await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/${slug}/view`,
+        {
+          method: "POST",
+        }
+      );
 
-    // job detail
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/jobs/${slug}`)
-      .then((res) => res.json())
-      .then((data) => setJob(data))
+      // then fetch updated job
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/${slug}`
+      );
 
-    // similar jobs
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/jobs`)
-      .then((res) => res.json())
-      .then((jobs) => {
-        const filtered = jobs
-          .filter((j: any) => j.slug !== slug)
-          .slice(0, 5)
-        setOtherJobs(filtered)
-      })
-      .finally(() => setLoading(false))
-  }, [slug])
+      const data = await res.json();
+      setJob(data);
+
+      // similar jobs
+      const jobsRes = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/jobs`
+      );
+
+      const jobs = await jobsRes.json();
+
+      setOtherJobs(
+        jobs.filter((j: any) => j.slug !== slug).slice(0, 5)
+      );
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  loadJob();
+}, [slug]);
 
   const handleApply = () => {
   const user = JSON.parse(localStorage.getItem("user") || "{}")

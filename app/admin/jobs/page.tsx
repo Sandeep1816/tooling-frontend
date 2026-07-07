@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   ChevronDown,
   Briefcase,
@@ -11,6 +11,9 @@ import {
   Eye,
   FileText,
 } from "lucide-react"
+import AdminPagination, { ADMIN_PAGE_SIZE } from "@/components/admin/AdminPagination"
+
+const PAGE_SIZE = ADMIN_PAGE_SIZE
 
 /* ================= TYPES ================= */
 
@@ -39,6 +42,7 @@ export default function AdminJobsPage() {
   const [openCompanyId, setOpenCompanyId] = useState<number | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const token =
     typeof window !== "undefined"
@@ -76,9 +80,30 @@ export default function AdminJobsPage() {
 
   /* ================= STATS ================= */
 
-  const filteredCompanies = companies.filter(company =>
-    company.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCompanies = useMemo(
+    () =>
+      companies.filter((company) =>
+        company.name.toLowerCase().includes(searchTerm.toLowerCase())
+      ),
+    [companies, searchTerm]
   )
+
+  const totalPages = Math.max(1, Math.ceil(filteredCompanies.length / PAGE_SIZE))
+
+  const paginatedCompanies = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return filteredCompanies.slice(start, start + PAGE_SIZE)
+  }, [filteredCompanies, currentPage])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
 
   const totalJobs = companies.reduce(
     (sum, c) => sum + c.jobsCount,
@@ -196,7 +221,12 @@ export default function AdminJobsPage() {
 
         {/* COMPANIES */}
         <div className="space-y-4">
-          {filteredCompanies.map(company => (
+          {paginatedCompanies.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm p-12 text-center text-gray-500">
+              No companies found matching your search.
+            </div>
+          ) : (
+            paginatedCompanies.map((company) => (
             <div
               key={company.id}
               className="bg-white rounded-xl shadow-sm  overflow-hidden"
@@ -262,14 +292,25 @@ export default function AdminJobsPage() {
                 </div>
               )}
             </div>
-          ))}
+            ))
+          )}
         </div>
+
+        {filteredCompanies.length > 0 && (
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={filteredCompanies.length}
+            pageSize={PAGE_SIZE}
+            itemLabel="companies"
+            onPageChange={setCurrentPage}
+            className="mt-8"
+          />
+        )}
       </div>
     </div>
   )
 }
-
-/* ================= STAT CARD ================= */
 
 function StatCard({
   label,

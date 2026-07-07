@@ -15,12 +15,11 @@ import {
   Edit,
   Trash2,
   Search,
-  ChevronLeft,
-  ChevronRight,
   FolderOpen,
   User,
   Eye,
 } from "lucide-react"
+import AdminPagination, { ADMIN_PAGE_SIZE } from "@/components/admin/AdminPagination"
 
 /* ================= TYPES ================= */
 
@@ -35,7 +34,7 @@ type Post = {
   views: number // ✅ ADD
 }
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = ADMIN_PAGE_SIZE
 
 /* ================= PAGE ================= */
 
@@ -55,6 +54,10 @@ export default function PostsList() {
     const t = setTimeout(() => setDebouncedSearch(search), 400)
     return () => clearTimeout(t)
   }, [search])
+
+  useEffect(() => {
+    setPage(1)
+  }, [debouncedSearch])
 
   /* ================= FETCH ================= */
 
@@ -195,7 +198,7 @@ export default function PostsList() {
     getCoreRowModel: getCoreRowModel(),
   })
 
-  const totalPages = Math.ceil(total / PAGE_SIZE)
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
   if (loading) {
     return (
@@ -285,29 +288,15 @@ export default function PostsList() {
             </tbody>
           </table>
 
-          {/* PAGINATION */}
-          <div className="p-4 border-t flex justify-between items-center">
-            <span className="text-sm text-gray-600">
-              Page {page} of {totalPages}
-            </span>
-
-            <div className="flex gap-2">
-              <button
-                disabled={page === 1}
-                onClick={() => setPage((p) => p - 1)}
-                className="p-2 border rounded disabled:opacity-50"
-              >
-                <ChevronLeft />
-              </button>
-              <button
-                disabled={page === totalPages}
-                onClick={() => setPage((p) => p + 1)}
-                className="p-2 border rounded disabled:opacity-50"
-              >
-                <ChevronRight />
-              </button>
-            </div>
-          </div>
+          <AdminPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={total}
+            pageSize={PAGE_SIZE}
+            itemLabel="posts"
+            onPageChange={setPage}
+            className="border-0 border-t rounded-none shadow-none"
+          />
         </div>
       </div>
     </div>

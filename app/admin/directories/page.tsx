@@ -1,8 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { Building2, Eye, Share2 } from "lucide-react"
+import AdminPagination, { ADMIN_PAGE_SIZE } from "@/components/admin/AdminPagination"
+
+const PAGE_SIZE = ADMIN_PAGE_SIZE
 
 /* ================= TYPES ================= */
 
@@ -24,6 +27,7 @@ type Directory = {
 export default function AdminDirectoriesPage() {
   const [directories, setDirectories] = useState<Directory[]>([])
   const [loading, setLoading] = useState(true)
+  const [currentPage, setCurrentPage] = useState(1)
 
   const token =
     typeof window !== "undefined"
@@ -75,6 +79,19 @@ export default function AdminDirectoriesPage() {
     (sum, d) => sum + (d.connections ?? 0),
     0
   )
+
+  const totalPages = Math.max(1, Math.ceil(directories.length / PAGE_SIZE))
+
+  const paginatedDirectories = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE
+    return directories.slice(start, start + PAGE_SIZE)
+  }, [directories, currentPage])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
 
   /* ================= LOADING ================= */
 
@@ -177,7 +194,7 @@ export default function AdminDirectoriesPage() {
               </thead>
 
               <tbody className="divide-y">
-                {directories.map(dir => (
+                {paginatedDirectories.map(dir => (
                   <tr key={dir.id} className="hover:bg-gray-50">
                     <td className="py-3 font-medium">
                       {dir.name}
@@ -220,6 +237,16 @@ export default function AdminDirectoriesPage() {
               </tbody>
             </table>
           )}
+
+          <AdminPagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            totalItems={directories.length}
+            pageSize={PAGE_SIZE}
+            itemLabel="suppliers"
+            onPageChange={setCurrentPage}
+            className="mt-6 border-0 shadow-none px-0"
+          />
         </div>
       </div>
     </div>

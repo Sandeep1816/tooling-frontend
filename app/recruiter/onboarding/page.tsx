@@ -63,7 +63,7 @@ export default function RecruiterOnboardingPage() {
         return
       }
 
-      // 2️⃣ Update recruiter profile + link company
+      // 2️⃣ Update recruiter profile (company is already linked on create)
       const profileRes = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/recruiters/profile`,
         {
@@ -75,13 +75,15 @@ export default function RecruiterOnboardingPage() {
           body: JSON.stringify({
             fullName,
             headline,
-            companyId: company.id, // ✅ CRITICAL
+            companyId: company.id,
           }),
         }
       )
 
+      const profileData = await profileRes.json().catch(() => ({}))
+
       if (!profileRes.ok) {
-        setError("Failed to update recruiter profile")
+        setError(profileData.error || "Failed to update recruiter profile")
         return
       }
 
@@ -91,6 +93,7 @@ export default function RecruiterOnboardingPage() {
         ...user,
         companyId: company.id,
         isOnboarded: true,
+        fullName: profileData.fullName || fullName,
       }
       localStorage.setItem("user", JSON.stringify(updatedUser))
 

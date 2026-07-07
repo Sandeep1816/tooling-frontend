@@ -1,4 +1,4 @@
-import Image from "next/image"
+import CandidateAvatar from "@/components/candidate/CandidateAvatar"
 import { MapPin, CheckCircle, Pencil } from "lucide-react"
 import Link from "next/link"
 
@@ -52,13 +52,12 @@ export default async function CandidateProfilePage(props: {
             <div className="px-6 pb-4 pt-0 relative">
 
               {/* AVATAR */}
-              <div className="relative w-24 h-24 absolute -top-12 left-6">
-                <Image
-                  src={candidate.avatarUrl || "https://i.pravatar.cc/180"}
-                  alt={candidate.fullName || candidate.username}
-                  fill
-                  className="rounded-full border-4 border-white object-cover bg-white"
-                  sizes="160px"
+              <div className="absolute -top-12 left-6">
+                <CandidateAvatar
+                  avatarUrl={candidate.avatarUrl}
+                  name={candidate.fullName || candidate.username}
+                  size="xl"
+                  borderClassName="border-4 border-white"
                 />
               </div>
 

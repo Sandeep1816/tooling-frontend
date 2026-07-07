@@ -1,80 +1,74 @@
-"use client"
-import Image from "next/image"
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+"use client";
 
-type Profile = {
-  email: string
-  username: string
-  fullName?: string
-  headline?: string
-  about?: string
-  location?: string
-  avatarUrl?: string
-  websiteUrl?: string
-}
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import UploadBox from "@/components/UploadBox";
+import {
+  fetchMyCandidateProfile,
+  syncCandidateUserInStorage,
+  updateMyCandidateProfile,
+  uploadCandidateImage,
+  type CandidateProfile,
+} from "@/lib/candidateProfile";
 
 export default function EditCandidateProfilePage() {
-  const router = useRouter()
+  const router = useRouter();
 
-  const [profile, setProfile] = useState<Profile | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [profile, setProfile] = useState<CandidateProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [message, setMessage] = useState("");
 
-  // 🔹 Load profile
   useEffect(() => {
-    fetch("/api/candidates/me", { credentials: "include" })
-      .then(res => res.json())
+    fetchMyCandidateProfile()
       .then(setProfile)
-      .finally(() => setLoading(false))
-  }, [])
+      .catch(() => setMessage("Failed to load profile"))
+      .finally(() => setLoading(false));
+  }, []);
 
-  // 🔹 Upload avatar to Cloudinary
   async function handleAvatarUpload(file: File) {
-    if (!file) return
+    if (!profile) return;
 
-    setUploading(true)
-
-    const formData = new FormData()
-    formData.append("image", file)
-
-    const res = await fetch("/api/upload", {
-      method: "POST",
-      body: formData,
-    })
-
-    const data = await res.json()
-
-    if (data.imageUrl) {
-      setProfile(prev =>
-        prev ? { ...prev, avatarUrl: data.imageUrl } : prev
-      )
+    setUploading(true);
+    setMessage("");
+    try {
+      const imageUrl = await uploadCandidateImage(file);
+      const updated = await updateMyCandidateProfile({
+        ...profile,
+        avatarUrl: imageUrl,
+      });
+      setProfile(updated);
+      syncCandidateUserInStorage(updated);
+      setMessage("Profile photo updated.");
+    } catch {
+      setMessage("Could not upload profile photo. Please try again.");
+    } finally {
+      setUploading(false);
     }
-
-    setUploading(false)
   }
 
-  // 🔹 Save profile
   async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!profile) return
+    e.preventDefault();
+    if (!profile) return;
 
-    setSaving(true)
-
-    await fetch("/api/candidates/me", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(profile),
-    })
-
-    setSaving(false)
-    router.push("/candidate/feed")
+    setSaving(true);
+    setMessage("");
+    try {
+      const updated = await updateMyCandidateProfile(profile);
+      setProfile(updated);
+      syncCandidateUserInStorage(updated);
+      setMessage("Profile saved successfully.");
+      setTimeout(() => router.push("/candidate/feed"), 1000);
+    } catch {
+      setMessage("Could not save profile. Please try again.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   if (loading || !profile) {
-    return <p className="p-6">Loading…</p>
+    return <p className="p-6">Loading…</p>;
   }
 
   return (
@@ -82,41 +76,25 @@ export default function EditCandidateProfilePage() {
       <h1 className="text-2xl font-semibold mb-6">Edit Profile</h1>
 
       <form onSubmit={handleSubmit} className="space-y-5">
-
-        {/* ================= AVATAR ================= */}
-        <div className="flex items-center gap-4">
-       <div className="relative w-20 h-20">
-  <Image
-    src={profile.avatarUrl || "https://i.pravatar.cc/100"}
-    alt="Avatar"
-    fill
-    className="rounded-full object-cover border"
-    sizes="80px"
-  />
-</div>
-
-          <label className="text-sm cursor-pointer">
-            <span className="text-blue-600 hover:underline">
-              {uploading ? "Uploading..." : "Change avatar"}
-            </span>
-            <input
-              type="file"
-              accept="image/*"
-              hidden
-              onChange={e =>
-                e.target.files && handleAvatarUpload(e.target.files[0])
-              }
-            />
-          </label>
+        <div className="max-w-xs">
+          <UploadBox
+            label={uploading ? "Uploading photo..." : "Profile photo"}
+            value={profile.avatarUrl}
+            onUpload={handleAvatarUpload}
+            height="h-40"
+            accept="image/*"
+          />
+          <p className="text-xs text-gray-500 mt-2">
+            Click the image area to upload a new photo. Changes save automatically.
+          </p>
         </div>
 
-        {/* ================= READ ONLY ================= */}
         <div>
           <label className="text-sm text-gray-500">Email</label>
           <input
             value={profile.email}
             disabled
-            className="w-full border px-3 py-2 rounded bg-gray-100"
+            className="w-full border px-3 py-2 rounded bg-gray-100 mt-1"
           />
         </div>
 
@@ -125,15 +103,14 @@ export default function EditCandidateProfilePage() {
           <input
             value={profile.username}
             disabled
-            className="w-full border px-3 py-2 rounded bg-gray-100"
+            className="w-full border px-3 py-2 rounded bg-gray-100 mt-1"
           />
         </div>
 
-        {/* ================= EDITABLE ================= */}
         <input
           placeholder="Full name"
           value={profile.fullName || ""}
-          onChange={e =>
+          onChange={(e) =>
             setProfile({ ...profile, fullName: e.target.value })
           }
           className="w-full border px-3 py-2 rounded"
@@ -142,7 +119,7 @@ export default function EditCandidateProfilePage() {
         <input
           placeholder="Headline"
           value={profile.headline || ""}
-          onChange={e =>
+          onChange={(e) =>
             setProfile({ ...profile, headline: e.target.value })
           }
           className="w-full border px-3 py-2 rounded"
@@ -151,7 +128,7 @@ export default function EditCandidateProfilePage() {
         <input
           placeholder="Location"
           value={profile.location || ""}
-          onChange={e =>
+          onChange={(e) =>
             setProfile({ ...profile, location: e.target.value })
           }
           className="w-full border px-3 py-2 rounded"
@@ -160,7 +137,7 @@ export default function EditCandidateProfilePage() {
         <input
           placeholder="Website URL"
           value={profile.websiteUrl || ""}
-          onChange={e =>
+          onChange={(e) =>
             setProfile({ ...profile, websiteUrl: e.target.value })
           }
           className="w-full border px-3 py-2 rounded"
@@ -170,19 +147,33 @@ export default function EditCandidateProfilePage() {
           placeholder="About you"
           rows={5}
           value={profile.about || ""}
-          onChange={e =>
+          onChange={(e) =>
             setProfile({ ...profile, about: e.target.value })
           }
           className="w-full border px-3 py-2 rounded"
         />
 
+        {message && (
+          <p
+            className={`text-sm ${
+              message.toLowerCase().includes("could not") ||
+              message.toLowerCase().includes("failed")
+                ? "text-red-600"
+                : "text-green-600"
+            }`}
+          >
+            {message}
+          </p>
+        )}
+
         <button
-          disabled={saving}
-          className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+          type="submit"
+          disabled={saving || uploading}
+          className="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700 disabled:opacity-60"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>
       </form>
     </div>
-  )
+  );
 }

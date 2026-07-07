@@ -29,4 +29,10 @@ export type Post = {
 
   author?: Author
   category?: Category
+  Company?: {
+    id: number
+    name: string
+    slug?: string
+    logoUrl?: string | null
+  }
 }

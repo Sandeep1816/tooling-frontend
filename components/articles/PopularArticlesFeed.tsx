@@ -5,16 +5,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Eye, TrendingUp } from "lucide-react";
 import type { Post } from "@/types/Post";
-
-function getImageUrl(url?: string | null) {
-  if (!url) return "/placeholder.svg";
-  if (url.startsWith("http")) return url;
-  const base = process.env.NEXT_PUBLIC_API_URL || "";
-  return `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-}
+import { fetchPostsList } from "@/lib/graphql/posts";
+import { resolveMediaUrl } from "@/lib/media";
 
 function getAuthorName(post: Post) {
   if (post.author?.name) return post.author.name;
+  const company = (post as Post & { company?: { name: string } }).company;
+  if (company?.name) return company.name;
   if (post.Company?.name) return post.Company.name;
   return "Tooling Trends";
 }
@@ -42,14 +39,10 @@ export default function PopularArticlesFeed({
   useEffect(() => {
     async function loadArticles() {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/articles/approved`,
-          { cache: "no-store" }
-        );
-        if (!res.ok) throw new Error("Failed to load articles");
-
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
+        const list = await fetchPostsList(50, {
+          categorySlug: "articles",
+          status: "APPROVED",
+        });
         const sorted = [...list].sort(
           (a, b) => (b.views ?? 0) - (a.views ?? 0)
         );
@@ -111,7 +104,7 @@ export default function PopularArticlesFeed({
           <Link href={`/post/${featured.slug}`} className="block">
             <div className="relative w-full aspect-[16/9] bg-gray-100">
               <Image
-                src={getImageUrl(featured.imageUrl)}
+                src={resolveMediaUrl(featured.imageUrl)}
                 alt={featured.title}
                 fill
                 className="object-cover"
@@ -157,7 +150,7 @@ export default function PopularArticlesFeed({
               className="relative w-full sm:w-44 md:w-52 aspect-[16/10] sm:aspect-auto sm:min-h-[140px] flex-shrink-0 bg-gray-100"
             >
               <Image
-                src={getImageUrl(post.imageUrl)}
+                src={resolveMediaUrl(post.imageUrl)}
                 alt={post.title}
                 fill
                 className="object-cover"

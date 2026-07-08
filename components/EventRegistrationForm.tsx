@@ -2,9 +2,10 @@
 
 import { Formik, Form, Field, ErrorMessage } from "formik"
 import * as Yup from "yup"
-import axios from "axios"
 import { useState, useRef } from "react"
+import { useMutation } from "@/lib/apollo/hooks"
 import { Turnstile } from "@marsidev/react-turnstile"
+import { REGISTER_FOR_EVENT_MUTATION } from "@/lib/graphql/operations"
 import {
   User,
   Mail,
@@ -35,6 +36,7 @@ export default function EventRegistrationForm({ slug }: Props) {
   const [errorMsg, setErrorMsg] = useState("")
   const [captchaToken, setCaptchaToken] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [registerForEvent] = useMutation(REGISTER_FOR_EVENT_MUTATION)
 
   const turnstileRef = useRef<any>(null)
 
@@ -72,27 +74,30 @@ export default function EventRegistrationForm({ slug }: Props) {
           try {
             setLoading(true)
 
-            const res = await axios.post(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/events/${slug}/register`,
-              { ...values, captchaToken }
-            )
+            await registerForEvent({
+              variables: {
+                input: {
+                  eventSlug: slug,
+                  captchaToken,
+                  fullName: values.fullName,
+                  email: values.email,
+                  phone: values.phone,
+                  companyName: values.companyName,
+                  jobTitle: values.jobTitle,
+                  country: values.country,
+                  specialRequirements: values.specialRequirements || undefined,
+                },
+              },
+            })
 
-            if (res.data.success) {
-              setSuccess("Registration Successful 🎉")
-
-              resetForm()
-              setCaptchaToken(null)
-
-              // 🔄 Reset Turnstile widget properly
-              turnstileRef.current?.reset()
-            }
-
-          } catch (err: any) {
+            setSuccess("Registration Successful 🎉")
+            resetForm()
+            setCaptchaToken(null)
+            turnstileRef.current?.reset()
+          } catch (err: unknown) {
             setErrorMsg(
-              err?.response?.data?.message || "Registration failed"
+              err instanceof Error ? err.message : "Registration failed"
             )
-
-            // 🔄 Reset token if backend rejected
             setCaptchaToken(null)
             turnstileRef.current?.reset()
           } finally {

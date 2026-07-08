@@ -1,34 +1,43 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useMutation } from "@/lib/apollo/hooks";
+import { LOGIN_MUTATION } from "@/lib/graphql/operations";
+import { getGraphQLErrorMessage, saveAuthSession } from "@/lib/auth/session";
 
 export default function AdminLogin() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+
+  const [login, { loading }] = useMutation(LOGIN_MUTATION);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
-    setError(""); setLoading(true);
+    setError("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+      const { data } = await login({
+        variables: { input: { email, password } },
       });
-      const data = await res.json();
-      setLoading(false);
 
-      if (res.ok) {
-        localStorage.setItem("token", data.token);
-        router.push("/admin/dashboard");
-      } else setError(data.message || "Invalid credentials");
-    } catch {
-      setLoading(false);
-      setError("Network error");
+      const payload = data?.login;
+      if (!payload) {
+        setError("Invalid credentials");
+        return;
+      }
+
+      const role = String(payload.user.role).toLowerCase();
+      if (role !== "admin") {
+        setError("Admin access only");
+        return;
+      }
+
+      saveAuthSession(payload);
+      router.push("/admin/dashboard");
+    } catch (err) {
+      setError(getGraphQLErrorMessage(err));
     }
   }
 
@@ -41,14 +50,14 @@ export default function AdminLogin() {
             type="email"
             placeholder="Email"
             value={email}
-            onChange={e=>setEmail(e.target.value)}
+            onChange={(e)=>setEmail(e.target.value)}
             className="w-full p-3 border rounded-lg"
           />
           <input
             type="password"
             placeholder="Password"
             value={password}
-            onChange={e=>setPassword(e.target.value)}
+            onChange={(e)=>setPassword(e.target.value)}
             className="w-full p-3 border rounded-lg"
           />
           {error && <p className="text-red-600 text-sm">{error}</p>}

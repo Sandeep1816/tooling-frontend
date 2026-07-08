@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Link from "next/link"
 import Image from "next/image"
 
@@ -12,7 +13,7 @@ export default function ArticleCard({ post }: ArticleCardProps) {
     post.imageUrl && post.imageUrl.startsWith("http")
       ? post.imageUrl
       : post.imageUrl
-        ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
+        ? `resolveMediaUrl(post.imageUrl)`
         : "/modern-manufacturing-facility.png"
 
   const date = post.publishedAt

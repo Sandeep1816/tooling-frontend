@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 
+/**
+ * No GraphQL mutation exists yet for supplier listing form submissions.
+ * Form state is collected client-side until a backend endpoint is added.
+ */
+
 const COUNTRIES = [
   "Afghanistan","Albania","Algeria","American Samoa","Andorra","Angola","Anguilla",
   "Antigua and Barbuda","Argentina","Armenia","Aruba","Australia","Austria","Azerbaijan",

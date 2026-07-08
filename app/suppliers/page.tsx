@@ -1,20 +1,24 @@
 "use client"
 
 import { useEffect, useState, useCallback } from "react"
+import { useQuery } from "@/lib/apollo/hooks"
 import { ChevronLeft, ChevronRight, SlidersHorizontal } from "lucide-react"
 import SupplierRowCard from "./SupplierRowCard"
 import SupplierFilters from "./SupplierFilters"
 import SupplierAds from "@/components/SupplierAds"
-import StandOut from "@/components/suppliers/StandOut";
-import ClientBanner from "@/components/Banners/ClientBanner";
+import StandOut from "@/components/suppliers/StandOut"
+import ClientBanner from "@/components/Banners/ClientBanner"
+import { SUPPLIERS_QUERY } from "@/lib/graphql/operations"
 
 type Supplier = {
-  id: number
+  id: string
   name: string
   slug: string
   description: string
   location?: string
   logoUrl?: string
+  views?: number
+  socialLinks?: Record<string, string>
 }
 
 type FilterState = {
@@ -22,15 +26,12 @@ type FilterState = {
   location: string
   category: string
   featuredOnly: boolean
-  industryId: number | null
+  industryId: string | null
 }
 
 const PER_PAGE = 15
 
 export default function SuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [total, setTotal] = useState(0)
-  const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
   const [showFilters, setShowFilters] = useState(false)
   const [sortBy, setSortBy] = useState("alphabetical")
@@ -43,70 +44,82 @@ export default function SuppliersPage() {
     industryId: null,
   })
 
-  // ✅ Fetch suppliers from backend with filter params
-  const fetchSuppliers = useCallback(async (filters: FilterState, page: number, sort: string) => {
-    setLoading(true)
-    try {
-      const params = new URLSearchParams()
+  const { data, loading, refetch } = useQuery(SUPPLIERS_QUERY, {
+    variables: {
+      filter: {
+        name: activeFilters.name || undefined,
+        location: activeFilters.location || undefined,
+        category: activeFilters.category || undefined,
+        featured: activeFilters.featuredOnly || undefined,
+        industryId: activeFilters.industryId || undefined,
+      },
+      page: currentPage,
+      limit: PER_PAGE,
+      sort: sortBy,
+    },
+  })
 
-      if (filters.name)        params.set("name", filters.name)
-      if (filters.location)    params.set("location", filters.location)
-      if (filters.category)    params.set("category", filters.category)
-      if (filters.featuredOnly) params.set("featured", "true")
-      if (filters.industryId)  params.set("industryId", String(filters.industryId))
+  const suppliers: Supplier[] =
+    data?.suppliers?.items?.map((s: {
+      id: string
+      name: string
+      slug: string
+      description: string
+      logoUrl?: string
+      views?: number
+      socialLinks?: Record<string, string>
+      company?: { location?: string }
+    }) => ({
+      id: s.id,
+      name: s.name,
+      slug: s.slug,
+      description: s.description,
+      logoUrl: s.logoUrl,
+      views: s.views,
+      socialLinks: s.socialLinks,
+      location: s.company?.location,
+    })) ?? []
 
-      params.set("page", String(page))
-      params.set("limit", String(PER_PAGE))
-      params.set("sort", sort)
+  const total = data?.suppliers?.total ?? 0
+  const totalPages = data?.suppliers?.totalPages ?? 1
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/suppliers?${params.toString()}`
-      )
-      const data = await res.json()
+  const fetchSuppliers = useCallback(
+    (filters: FilterState, page: number, sort: string) => {
+      setActiveFilters(filters)
+      setCurrentPage(page)
+      setSortBy(sort)
+      refetch({
+        filter: {
+          name: filters.name || undefined,
+          location: filters.location || undefined,
+          category: filters.category || undefined,
+          featured: filters.featuredOnly || undefined,
+          industryId: filters.industryId || undefined,
+        },
+        page,
+        limit: PER_PAGE,
+        sort,
+      })
+    },
+    [refetch]
+  )
 
-      // Handle both { data: [], total: N } and plain []
-      if (Array.isArray(data)) {
-        setSuppliers(data)
-        setTotal(data.length)
-      } else {
-        setSuppliers(data.data ?? [])
-        setTotal(data.total ?? 0)
-      }
-    } catch (err) {
-      console.error("Failed to fetch suppliers", err)
-    } finally {
-      setLoading(false)
-    }
-  }, [])
-
-  // Initial load
-  useEffect(() => {
-    fetchSuppliers(activeFilters, currentPage, sortBy)
-  }, [])
-
-  // When filters change — reset to page 1
   const handleFilterChange = (filters: FilterState) => {
-    setActiveFilters(filters)
-    setCurrentPage(1)
     fetchSuppliers(filters, 1, sortBy)
   }
 
-  // When sort changes
   const handleSortChange = (sort: string) => {
-    setSortBy(sort)
     fetchSuppliers(activeFilters, currentPage, sort)
   }
 
-  // Prevent body scroll when mobile filters open
   useEffect(() => {
     document.body.style.overflow = showFilters ? "hidden" : "unset"
-    return () => { document.body.style.overflow = "unset" }
+    return () => {
+      document.body.style.overflow = "unset"
+    }
   }, [showFilters])
 
-  const totalPages = Math.ceil(total / PER_PAGE)
-
   const handlePageChange = (page: number) => {
-    setCurrentPage(page)
     fetchSuppliers(activeFilters, page, sortBy)
     window.scrollTo({ top: 0, behavior: "smooth" })
   }
@@ -130,8 +143,6 @@ export default function SuppliersPage() {
   return (
     <div className="min-h-screen w-full">
       <div className="w-full max-w-full mx-auto px-4 lg:px-6 lg:pr-8 pt-0 pb-4 md:py-6">
-
-        {/* MOBILE FILTER BUTTON resgg*/}
         <button
           onClick={() => setShowFilters(true)}
           className="lg:hidden fixed bottom-6 right-6 z-40 bg-[#0b3954] text-white p-4 rounded-full shadow-lg flex items-center gap-2 hover:bg-[#0a2f42] transition-colors"
@@ -141,15 +152,12 @@ export default function SuppliersPage() {
         </button>
 
         <div className="w-full grid grid-cols-1 lg:[grid-template-columns:300px_minmax(0,1fr)_360px] gap-6 lg:gap-8">
-
-          {/* LEFT FILTERS — DESKTOP */}
           <aside className="hidden lg:block">
             <div className="sticky top-24">
               <SupplierFilters onFilterChange={handleFilterChange} />
             </div>
           </aside>
 
-          {/* LEFT FILTERS — MOBILE MODAL  .*/}
           {showFilters && (
             <>
               <div
@@ -162,24 +170,18 @@ export default function SuppliersPage() {
                   <button onClick={() => setShowFilters(false)} className="text-gray-500 hover:text-gray-700 text-2xl">×</button>
                 </div>
                 <div className="p-4">
-                  <SupplierFilters onFilterChange={(f) => { handleFilterChange(f); setShowFilters(false) }} />
-                </div>
-                <div className="sticky bottom-0 bg-white border-t p-4">
-                  <button
-                    onClick={() => setShowFilters(false)}
-                    className="w-full bg-[#0b3954] text-white py-3 rounded font-semibold hover:bg-[#0a2f42] transition-colors"
-                  >
-                    View Results
-                  </button>
+                  <SupplierFilters
+                    onFilterChange={(f) => {
+                      handleFilterChange(f)
+                      setShowFilters(false)
+                    }}
+                  />
                 </div>
               </div>
             </>
           )}
 
-          {/* CENTER CONTENT */}
           <main className="space-y-4 md:space-y-6">
-
-            {/* HERO */}
             <div className="relative w-full h-[96px] sm:h-[140px] md:h-[160px] rounded-lg overflow-hidden">
               <img
                 src="/images/search-landscape.jpg"
@@ -194,14 +196,6 @@ export default function SuppliersPage() {
               </div>
             </div>
 
-            {/* BREADCRUMB */}
-            <div className="text-sm text-gray-600">
-              <span className="underline cursor-pointer hover:text-gray-800">Home</span>
-              <span className="mx-2">›</span>
-              <span className="font-medium text-gray-800">Find a Supplier</span>
-            </div>
-
-            {/* SEARCH HEADER */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
               <div>
                 <h2 className="text-2xl md:text-3xl font-bold text-[#0b3954]">Search Results</h2>
@@ -213,7 +207,7 @@ export default function SuppliersPage() {
               <select
                 className="border border-gray-300 px-3 py-2 text-sm rounded focus:outline-none focus:ring-2 focus:ring-[#0b3954]"
                 value={sortBy}
-                onChange={e => handleSortChange(e.target.value)}
+                onChange={(e) => handleSortChange(e.target.value)}
               >
                 <option value="alphabetical">Alphabetical</option>
                 <option value="newest">Most Recent</option>
@@ -221,7 +215,6 @@ export default function SuppliersPage() {
               </select>
             </div>
 
-            {/* RESULTS */}
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <div className="text-center">
@@ -231,7 +224,7 @@ export default function SuppliersPage() {
               </div>
             ) : suppliers.length > 0 ? (
               <div className="space-y-4">
-                {suppliers.map(s => (
+                {suppliers.map((s) => (
                   <SupplierRowCard key={s.id} supplier={s} />
                 ))}
               </div>
@@ -241,75 +234,72 @@ export default function SuppliersPage() {
                 <p className="text-gray-400 text-sm mt-1">Try adjusting your filters.</p>
               </div>
             )}
-             
 
-            {/* PAGINATION */}
             {totalPages > 1 && (
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 pb-20 lg:pb-6">
-                <div className="text-sm text-gray-600 sm:hidden">Page {currentPage} of {totalPages}</div>
-
+                <div className="text-sm text-gray-600 sm:hidden">
+                  Page {currentPage} of {totalPages}
+                </div>
                 <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-center">
                   <button
                     onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                     disabled={currentPage === 1}
-                    className={`w-9 h-9 sm:w-10 sm:h-10 border flex items-center justify-center text-sm font-semibold rounded transition-colors
-                      ${currentPage === 1 ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-white text-[#0b3954] hover:bg-gray-100"}`}
+                    className={`w-9 h-9 sm:w-10 sm:h-10 border flex items-center justify-center text-sm font-semibold rounded transition-colors ${
+                      currentPage === 1
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-white text-[#0b3954] hover:bg-gray-100"
+                    }`}
                   >
                     <ChevronLeft size={16} />
                   </button>
-
                   {getPaginationNumbers().map((page, idx) =>
                     page === "..." ? (
-                      <span key={`e-${idx}`} className="px-2 text-gray-500">...</span>
+                      <span key={`e-${idx}`} className="px-2 text-gray-500">
+                        ...
+                      </span>
                     ) : (
                       <button
                         key={page}
                         onClick={() => handlePageChange(page as number)}
-                        className={`w-9 h-9 sm:w-10 sm:h-10 border text-sm font-semibold rounded transition-colors
-                          ${page === currentPage ? "bg-[#0b3954] text-white" : "bg-white text-[#0b3954] hover:bg-gray-100"}`}
+                        className={`w-9 h-9 sm:w-10 sm:h-10 border text-sm font-semibold rounded transition-colors ${
+                          page === currentPage
+                            ? "bg-[#0b3954] text-white"
+                            : "bg-white text-[#0b3954] hover:bg-gray-100"
+                        }`}
                       >
                         {page}
                       </button>
                     )
                   )}
-
                   <button
                     onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                     disabled={currentPage === totalPages}
-                    className={`w-9 h-9 sm:w-10 sm:h-10 border flex items-center justify-center text-sm font-semibold rounded transition-colors
-                      ${currentPage === totalPages ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "bg-white text-[#0b3954] hover:bg-gray-100"}`}
+                    className={`w-9 h-9 sm:w-10 sm:h-10 border flex items-center justify-center text-sm font-semibold rounded transition-colors ${
+                      currentPage === totalPages
+                        ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                        : "bg-white text-[#0b3954] hover:bg-gray-100"
+                    }`}
                   >
                     <ChevronRight size={16} />
                   </button>
                 </div>
-
-                <div className="hidden sm:block text-sm text-gray-600">Page {currentPage} of {totalPages}</div>
               </div>
             )}
-             
           </main>
 
-          {/* RIGHT ADS — DESKTOP */}
           <aside className="hidden lg:block">
             <div className="sticky top-24">
               <SupplierAds />
             </div>
           </aside>
 
-          {/* RIGHT ADS — MOBILE */}
           <div className="lg:hidden">
             <SupplierAds />
           </div>
-        
         </div>
-          
       </div>
-      {/* Stand Out Section */}
-                <StandOut />
-              
-              {/* Banner after Stand Out */}
-              <ClientBanner placement="SUPPLIER_AFTER_VIDEO" />
+      <StandOut />
+      <ClientBanner placement="SUPPLIER_AFTER_VIDEO" />
     </div>
-    
   )
 }

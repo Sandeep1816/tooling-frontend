@@ -1,69 +1,69 @@
 "use client";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useMemo, useState } from "react";
 import { DragDropContext, Droppable, Draggable } from "@hello-pangea/dnd";
+import { useMutation, useQuery } from "@/lib/apollo/hooks";
 import { BANNER_PLACEMENTS } from "@/lib/bannerPlacements";
+import {
+  ADMIN_BANNERS_QUERY,
+  REORDER_BANNERS_MUTATION,
+} from "@/lib/graphql/operations";
+
+type Banner = {
+  id: string;
+  title: string;
+  imageUrl: string;
+  placement: string;
+  status: string;
+  position: number;
+};
 
 export default function BannerReorderPage() {
   const [placement, setPlacement] = useState("HOME_MIDDLE");
-  const [banners, setBanners] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [localBanners, setLocalBanners] = useState<Banner[] | null>(null);
 
-  // Fetch banners for selected placement
-  const fetchBanners = async (selectedPlacement: string) => {
-    setLoading(true);
+  const { data, loading } = useQuery(ADMIN_BANNERS_QUERY);
+  const [reorderBanners] = useMutation(REORDER_BANNERS_MUTATION);
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/banners/admin/all`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    );
+  const banners = useMemo(() => {
+    if (localBanners !== null) return localBanners;
 
-    const allBanners = await res.json();
+    const all = (data?.adminBanners ?? []) as Banner[];
+    return all
+      .filter((b) => b.placement === placement)
+      .sort((a, b) => a.position - b.position);
+  }, [data, placement, localBanners]);
 
-    const filtered = allBanners
-      .filter((b: any) => b.placement === selectedPlacement)
-      .sort((a: any, b: any) => a.position - b.position);
-
-    setBanners(filtered);
-    setLoading(false);
+  const onPlacementChange = (value: string) => {
+    setPlacement(value);
+    setLocalBanners(null);
   };
 
-  useEffect(() => {
-    fetchBanners(placement);
-  }, [placement]);
-
-  // Drag end handler
-  const onDragEnd = async (result: any) => {
+  const onDragEnd = async (result: {
+    destination?: { index: number } | null;
+    source: { index: number };
+  }) => {
     if (!result.destination) return;
 
     const items = Array.from(banners);
     const [moved] = items.splice(result.source.index, 1);
     items.splice(result.destination.index, 0, moved);
 
-    // Update UI immediately
-    setBanners(items);
+    setLocalBanners(items);
 
-    // Persist order in backend
-    await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/banners/reorder`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: JSON.stringify(
-          items.map((b, index) => ({
+    try {
+      await reorderBanners({
+        variables: {
+          updates: items.map((b, index) => ({
             id: b.id,
             position: index,
-          }))
-        ),
-      }
-    );
+          })),
+        },
+      });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Reorder failed");
+      setLocalBanners(null);
+    }
   };
 
   return (
@@ -72,10 +72,9 @@ export default function BannerReorderPage() {
         Reorder Advertisement Banners
       </h1>
 
-      {/* Placement Selector */}
       <select
         value={placement}
-        onChange={(e) => setPlacement(e.target.value)}
+        onChange={(e) => onPlacementChange(e.target.value)}
         className="border p-2 mb-6"
       >
         {BANNER_PLACEMENTS.map((p) => (
@@ -101,7 +100,7 @@ export default function BannerReorderPage() {
                 {banners.map((b, index) => (
                   <Draggable
                     key={b.id}
-                    draggableId={String(b.id)}
+                    draggableId={b.id}
                     index={index}
                   >
                     {(provided) => (
@@ -116,14 +115,14 @@ export default function BannerReorderPage() {
                         </span>
 
                         <div className="relative w-24 h-14">
-  <Image
-    src={b.imageUrl}
-    alt={b.title || "Banner"}
-    fill
-    className="object-cover rounded"
-    sizes="96px"
-  />
-</div>
+                          <Image
+                            src={b.imageUrl}
+                            alt={b.title || "Banner"}
+                            fill
+                            className="object-cover rounded"
+                            sizes="96px"
+                          />
+                        </div>
 
                         <div>
                           <p className="font-medium">{b.title}</p>

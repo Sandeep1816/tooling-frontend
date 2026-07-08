@@ -1,4 +1,6 @@
 "use client"
+
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 import Link from "next/link"
 
@@ -11,7 +13,7 @@ export default function FeaturedArticle({ post }: FeaturedArticleProps) {
     post.imageUrl && post.imageUrl.startsWith("http")
       ? post.imageUrl
       : post.imageUrl
-        ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
+        ? `resolveMediaUrl(post.imageUrl)`
         : "/manufacturing-mold.jpg"
 
   const date = post.publishedAt

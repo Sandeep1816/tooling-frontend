@@ -1,3 +1,6 @@
+import { JOB_POSTING_ELIGIBILITY_QUERY } from "@/lib/graphql/queries";
+import { graphqlRequest } from "@/lib/graphql/server";
+
 export type JobPostingEligibility = {
   canPost: boolean;
   plan?: string;
@@ -12,20 +15,38 @@ export type JobPostingEligibility = {
   message?: string;
 };
 
+type EligibilityResponse = {
+  jobPostingEligibility: {
+    canPost: boolean;
+    plan: string;
+    activeJobs: number;
+    effectiveLimit: string;
+    remaining: number | null;
+    message?: string | null;
+  };
+};
+
 export async function fetchJobPostingEligibility(
   token: string
 ): Promise<JobPostingEligibility> {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/recruiter/posting-eligibility`,
-    {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    }
+  const data = await graphqlRequest<EligibilityResponse>(
+    JOB_POSTING_ELIGIBILITY_QUERY,
+    undefined,
+    { token }
   );
 
-  if (!res.ok) {
-    throw new Error("Failed to load job posting eligibility");
-  }
+  const e = data.jobPostingEligibility;
+  const isUnlimited = e.effectiveLimit === "Unlimited";
 
-  return res.json();
+  return {
+    canPost: e.canPost,
+    plan: e.plan,
+    planLabel: e.plan.charAt(0).toUpperCase() + e.plan.slice(1),
+    activeJobs: e.activeJobs,
+    effectiveLimit: isUnlimited ? "Unlimited" : Number(e.effectiveLimit),
+    remaining: e.remaining,
+    isUnlimited,
+    upgradeRequired: !e.canPost,
+    message: e.message ?? undefined,
+  };
 }

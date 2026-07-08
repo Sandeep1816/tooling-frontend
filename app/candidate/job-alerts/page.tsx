@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import {
   ArrowLeft,
   Bell,
@@ -13,9 +14,15 @@ import {
   X,
 } from "lucide-react"
 import { useCandidateGuard } from "@/lib/useCandidateGuard"
+import {
+  CREATE_JOB_ALERT_MUTATION,
+  DELETE_JOB_ALERT_MUTATION,
+  JOB_ALERTS_QUERY,
+  UPDATE_JOB_ALERT_MUTATION,
+} from "@/lib/graphql/operations"
 
 type JobAlert = {
-  id: number
+  id: string
   name: string | null
   keywords: string | null
   location: string | null
@@ -38,8 +45,13 @@ const EMPLOYMENT_TYPES = [
 export default function JobAlertsPage() {
   useCandidateGuard()
 
-  const [alerts, setAlerts] = useState<JobAlert[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data, loading, refetch } = useQuery(JOB_ALERTS_QUERY)
+  const [createJobAlert, { loading: saving }] = useMutation(CREATE_JOB_ALERT_MUTATION)
+  const [updateJobAlert] = useMutation(UPDATE_JOB_ALERT_MUTATION)
+  const [deleteJobAlert] = useMutation(DELETE_JOB_ALERT_MUTATION)
+
+  const alerts: JobAlert[] = data?.jobAlerts ?? []
+
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({
     name: "",
@@ -48,102 +60,49 @@ export default function JobAlertsPage() {
     employmentType: "",
     isRemote: false,
   })
-  const [saving, setSaving] = useState(false)
-
-  async function loadAlerts() {
-    try {
-      const token = localStorage.getItem("token")
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/job-alerts/me`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      )
-      const data = await res.json()
-      if (Array.isArray(data)) setAlerts(data)
-    } catch (err) {
-      console.error("Failed to load job alerts", err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    loadAlerts()
-  }, [])
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
     if (!form.keywords && !form.location && !form.employmentType) return
 
-    setSaving(true)
     try {
-      const token = localStorage.getItem("token")
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/job-alerts`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
+      await createJobAlert({
+        variables: {
+          input: {
+            name: form.name || undefined,
+            keywords: form.keywords || undefined,
+            location: form.location || undefined,
+            employmentType: form.employmentType || undefined,
+            isRemote: form.isRemote || undefined,
           },
-          body: JSON.stringify({
-            name: form.name || null,
-            keywords: form.keywords || null,
-            location: form.location || null,
-            employmentType: form.employmentType || null,
-            isRemote: form.isRemote || null,
-          }),
-        }
-      )
-
-      if (res.ok) {
-        setForm({ name: "", keywords: "", location: "", employmentType: "", isRemote: false })
-        setShowForm(false)
-        await loadAlerts()
-      }
+        },
+      })
+      setForm({ name: "", keywords: "", location: "", employmentType: "", isRemote: false })
+      setShowForm(false)
+      refetch()
     } catch (err) {
       console.error("Failed to create alert", err)
-    } finally {
-      setSaving(false)
     }
   }
 
   async function toggleActive(alert: JobAlert) {
     try {
-      const token = localStorage.getItem("token")
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/job-alerts/${alert.id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ isActive: !alert.isActive }),
-        }
-      )
-      if (res.ok) {
-        setAlerts((prev) =>
-          prev.map((a) =>
-            a.id === alert.id ? { ...a, isActive: !a.isActive } : a
-          )
-        )
-      }
+      await updateJobAlert({
+        variables: {
+          id: alert.id,
+          input: { isActive: !alert.isActive },
+        },
+      })
+      refetch()
     } catch (err) {
       console.error("Failed to toggle alert", err)
     }
   }
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: string) {
     try {
-      const token = localStorage.getItem("token")
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/job-alerts/${id}`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      )
-      setAlerts((prev) => prev.filter((a) => a.id !== id))
+      await deleteJobAlert({ variables: { id } })
+      refetch()
     } catch (err) {
       console.error("Failed to delete alert", err)
     }

@@ -3,9 +3,11 @@ import Link from "next/link"
 import SupplierAds from "@/components/SupplierAds"
 import EventViewTracker from "@/components/events/EventViewTracker"
 import EventRegisterModal from "@/components/events/EventRegisterModal"
+import { graphqlRequest, getCalendarEventUrl } from "@/lib/graphql/server"
+import { EVENT_BY_SLUG_QUERY } from "@/lib/graphql/queries"
 
 type Event = {
-  id: number
+  id: string
   title: string
   slug: string
   logoUrl?: string
@@ -19,13 +21,14 @@ type Event = {
 }
 
 async function getEvent(slug: string): Promise<Event | null> {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/events/${slug}`,
-    { cache: "no-store" }
-  )
-
-  if (!res.ok) return null
-  return res.json()
+  try {
+    const data = await graphqlRequest<{ event: Event }>(EVENT_BY_SLUG_QUERY, {
+      slug,
+    })
+    return data.event
+  } catch {
+    return null
+  }
 }
 
 export default async function EventDetailsPage({
@@ -34,7 +37,6 @@ export default async function EventDetailsPage({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-
   const event = await getEvent(slug)
 
   if (!event) {
@@ -47,10 +49,8 @@ export default async function EventDetailsPage({
 
   return (
     <div className="w-full">
-
       <EventViewTracker slug={slug} />
 
-      {/* HERO */}
       <div className="relative w-full h-[420px]">
         {event.bannerUrl && (
           <Image
@@ -64,7 +64,6 @@ export default async function EventDetailsPage({
 
         <div className="absolute inset-0 bg-black/60 flex items-center">
           <div className="max-w-7xl mx-auto px-6 text-white max-w-2xl">
-
             {event.logoUrl && (
               <Image
                 src={event.logoUrl}
@@ -75,9 +74,7 @@ export default async function EventDetailsPage({
               />
             )}
 
-            <h1 className="text-3xl md:text-4xl font-bold mb-3">
-              {event.title}
-            </h1>
+            <h1 className="text-3xl md:text-4xl font-bold mb-3">{event.title}</h1>
 
             <p className="text-lg mb-2">
               {new Date(event.startDate).toLocaleDateString()} –{" "}
@@ -85,36 +82,23 @@ export default async function EventDetailsPage({
             </p>
 
             {event.location && (
-              <p className="text-lg mb-6">
-                📍 {event.location}
-              </p>
+              <p className="text-lg mb-6">📍 {event.location}</p>
             )}
 
-            {/* Popup Register Button */}
             <EventRegisterModal slug={slug} />
-
           </div>
         </div>
       </div>
 
-      {/* CONTENT */}
       <div className="max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-10">
-
         <main className="lg:col-span-8 space-y-10">
-
           <section>
-            <h2 className="text-2xl font-bold mb-4">
-              About This Event
-            </h2>
-            <p className="text-gray-800 whitespace-pre-line">
-              {event.description}
-            </p>
+            <h2 className="text-2xl font-bold mb-4">About This Event</h2>
+            <p className="text-gray-800 whitespace-pre-line">{event.description}</p>
           </section>
 
           <section className="border-t pt-6">
-            <h3 className="text-xl font-semibold mb-4">
-              Event Information
-            </h3>
+            <h3 className="text-xl font-semibold mb-4">Event Information</h3>
 
             <ul className="space-y-2 text-gray-700">
               <li>
@@ -142,26 +126,22 @@ export default async function EventDetailsPage({
                 </li>
               )}
 
-              {event.calendarUrl && (
-                <li>
-                  <strong>Add to calendar:</strong>{" "}
-                  <Link
-                    href={`${process.env.NEXT_PUBLIC_API_URL}/api/calendar/event/${event.slug}.ics`}
-                    className="text-blue-600 underline"
-                  >
-                    Add to calendar
-                  </Link>
-                </li>
-              )}
+              <li>
+                <strong>Add to calendar:</strong>{" "}
+                <Link
+                  href={getCalendarEventUrl(event.slug)}
+                  className="text-blue-600 underline"
+                >
+                  Add to calendar
+                </Link>
+              </li>
             </ul>
           </section>
-
         </main>
 
         <aside className="lg:col-span-4">
           <SupplierAds />
         </aside>
-
       </div>
     </div>
   )

@@ -8,6 +8,7 @@ import Footer from "@/components/Footer"
 import Header from "@/components/Header"
 import CTASection from "@/components/CTASection"
 import CursorBall from "@/components/ui/CursorBall"
+import { ApolloWrapper } from "@/lib/apollo/provider"
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -29,6 +30,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={interTight.variable}>
       <body className="antialiased">
+        <ApolloWrapper>
 
           {/* GLOBAL CURSOR */}
              {/* <CursorBall /> */}
@@ -44,6 +46,7 @@ export default function RootLayout({
 
         <Analytics />
         <Footer />
+        </ApolloWrapper>
       </body>
     </html>
   )

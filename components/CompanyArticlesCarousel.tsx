@@ -8,13 +8,13 @@ import { useRef } from "react"
 /* ================= TYPES ================= */
 
 type Company = {
-  id: number
+  id: string
   name: string
   slug: string
 }
 
 type Article = {
-  id: number
+  id: string
   title: string
   slug: string
   excerpt?: string | null

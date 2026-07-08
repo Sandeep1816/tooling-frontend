@@ -5,9 +5,11 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { BannerPlacement } from "@/lib/bannerPlacements";
+import { graphqlRequest, getBannerClickUrl } from "@/lib/graphql/server";
+import { BANNERS_BY_PLACEMENT_QUERY } from "@/lib/graphql/queries";
 
 type BannerData = {
-  id: number;
+  id: string;
   title: string;
   imageUrl: string;
   targetUrl?: string;
@@ -23,24 +25,11 @@ export default function ClientBanner({ placement }: BannerProps) {
   useEffect(() => {
     async function loadBanner() {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/banners?placement=${placement}`,
-          {
-            cache: "no-store",
-          }
-        );
+        const data = await graphqlRequest<{
+          banners: BannerData[];
+        }>(BANNERS_BY_PLACEMENT_QUERY, { placement });
 
-        if (!res.ok) return;
-
-        const data = await res.json();
-
-        const bannerData = Array.isArray(data)
-          ? data[0]
-          : Array.isArray(data.data)
-          ? data.data[0]
-          : null;
-
-        setBanner(bannerData);
+        setBanner(data.banners[0] ?? null);
       } catch (error) {
         console.error("Banner Error:", error);
       }
@@ -50,6 +39,8 @@ export default function ClientBanner({ placement }: BannerProps) {
   }, [placement]);
 
   if (!banner) return null;
+
+  const clickUrl = getBannerClickUrl(banner.id);
 
   // HOME_TOP and ARTICLE_TOP: fixed 728x90 (responsive below 728px)
   if (placement === "HOME_TOP" || placement === "ARTICLE_TOP") {
@@ -61,7 +52,7 @@ export default function ClientBanner({ placement }: BannerProps) {
             style={{ maxWidth: "728px", aspectRatio: "728 / 90" }}
           >
             <Link
-              href={banner.targetUrl || "#"}
+              href={clickUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="block w-full h-full"
@@ -79,36 +70,7 @@ export default function ClientBanner({ placement }: BannerProps) {
       </section>
     );
   }
-  // // SIDEBAR: fixed 300x250, never changes
-  // if (placement === "SIDEBAR") {
-  //   return (
-  //     <section className="py-6">
-  //       <div className="flex justify-center">
-  //         <Link
-  //           href={banner.targetUrl || "#"}
-  //           target="_blank"
-  //           rel="noopener noreferrer"
-  //         >
-  //           <div
-  //             className="relative overflow-hidden"
-  //             style={{ width: "300px", height: "250px" }}
-  //           >
-  //             <Image
-  //               src={banner.imageUrl}
-  //               alt={banner.title}
-  //               fill
-  //               sizes="300px"
-  //               className="object-cover"
-  //             />
-  //           </div>
-  //         </Link>
-  //       </div>
-  //     </section>
-  //   );
-  // }
 
-  // Everything else: 970x250 leaderboard
-  // HOME_MIDDLE, HOME_BOTTOM, ARTICLE_MIDDLE, ARTICLE_BOTTOM: background block
   if (
     placement === "HOME_MIDDLE" ||
     placement === "HOME_BOTTOM" ||
@@ -119,7 +81,7 @@ export default function ClientBanner({ placement }: BannerProps) {
       <section className="py-10 px-6" style={{ backgroundColor: "#F8F9FA" }}>
         <div className="max-w-[970px] w-full mx-auto flex justify-center">
           <Link
-            href={banner.targetUrl || "#"}
+            href={clickUrl}
             target="_blank"
             rel="noopener noreferrer"
           >

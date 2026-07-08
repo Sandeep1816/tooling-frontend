@@ -2,46 +2,41 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-
-type Profile = {
-  email: string
-  username: string
-  fullName?: string
-  headline?: string
-  about?: string
-  location?: string
-  avatarUrl?: string
-  websiteUrl?: string
-}
+import {
+  fetchMyCandidateProfile,
+  syncCandidateUserInStorage,
+  updateMyCandidateProfile,
+  type CandidateProfile,
+} from "@/lib/candidateProfile"
 
 export default function EditCandidateProfilePage() {
   const router = useRouter()
-  const [profile, setProfile] = useState<Profile | null>(null)
+  const [profile, setProfile] = useState<CandidateProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch("/api/candidates/me", {
-      credentials: "include",
-    })
-      .then(res => res.json())
+    fetchMyCandidateProfile()
       .then(setProfile)
+      .catch(console.error)
       .finally(() => setLoading(false))
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!profile) return
+
     setSaving(true)
 
-    await fetch("/api/candidates/me", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify(profile),
-    })
-
-    setSaving(false)
-    router.push("/candidate/feed")
+    try {
+      const updated = await updateMyCandidateProfile(profile)
+      syncCandidateUserInStorage(updated)
+      router.push("/candidate/feed")
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading || !profile) return <p className="p-6">Loading…</p>

@@ -1,8 +1,10 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import {
   createColumnHelper,
   flexRender,
@@ -20,18 +22,20 @@ import {
   Eye,
 } from "lucide-react"
 import AdminPagination, { ADMIN_PAGE_SIZE } from "@/components/admin/AdminPagination"
+import { DELETE_POST_MUTATION, POSTS_QUERY } from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
 
 /* ================= TYPES ================= */
 
 type Post = {
-  id: number
+  id: string
   title: string
   slug: string
   imageUrl?: string
   category?: { name: string }
   author?: { name: string }
   publishedAt?: string
-  views: number // ✅ ADD
+  views: number
 }
 
 const PAGE_SIZE = ADMIN_PAGE_SIZE
@@ -41,12 +45,24 @@ const PAGE_SIZE = ADMIN_PAGE_SIZE
 export default function PostsList() {
   const router = useRouter()
 
-  const [posts, setPosts] = useState<Post[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
+
+  const { data, loading, refetch } = useQuery(POSTS_QUERY, {
+    variables: {
+      first: PAGE_SIZE,
+      page,
+      filter: debouncedSearch ? { search: debouncedSearch } : undefined,
+      sort: { field: "PUBLISHED_AT", order: "DESC" },
+    },
+    fetchPolicy: "network-only",
+  })
+
+  const [deletePost] = useMutation(DELETE_POST_MUTATION)
+
+  const posts: Post[] = data?.posts?.edges?.map((e: { node: Post }) => e.node) ?? []
+  const total = data?.posts?.totalCount ?? 0
 
   /* ================= DEBOUNCE ================= */
 
@@ -59,42 +75,20 @@ export default function PostsList() {
     setPage(1)
   }, [debouncedSearch])
 
-  /* ================= FETCH ================= */
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/posts?page=${page}&limit=${PAGE_SIZE}&q=${debouncedSearch}`
-      )
-      const json = await res.json()
-
-      setPosts(json.data)
-      setTotal(json.meta.total)
-      setLoading(false)
-    }
-
-    load()
-  }, [page, debouncedSearch])
-
   /* ================= DELETE ================= */
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: string) {
     const token = localStorage.getItem("token")
     if (!token) return alert("Unauthorized")
 
     if (!confirm("Delete this post?")) return
 
-    await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/posts/${id}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    )
-
-    setPosts((p) => p.filter((x) => x.id !== id))
+    try {
+      await deletePost({ variables: { id } })
+      await refetch()
+    } catch (err) {
+      alert(getGraphQLErrorMessage(err))
+    }
   }
 
   /* ================= TABLE ================= */
@@ -109,7 +103,7 @@ export default function PostsList() {
         const url = info.row.original.imageUrl
         return url ? (
           <Image
-            src={url.startsWith("http") ? url : `${process.env.NEXT_PUBLIC_API_URL}${url}`}
+            src={resolveMediaUrl(url)}
             width={64}
             height={64}
             alt=""
@@ -126,46 +120,38 @@ export default function PostsList() {
     columnHelper.accessor("title", {
       header: "Title",
       cell: (info) => (
-        <div>
-          <p className="font-semibold line-clamp-2">
-            {info.getValue()}
-          </p>
-          <p className="text-xs text-gray-500">
-            /{info.row.original.slug}
-          </p>
-        </div>
+        <div className="max-w-xs truncate font-medium">{info.getValue()}</div>
       ),
     }),
 
-    columnHelper.display({
-      id: "category",
+    columnHelper.accessor("category", {
       header: "Category",
-      cell: (info) =>
-        info.row.original.category?.name ?? (
-          <span className="text-gray-400">—</span>
-        ),
+      cell: (info) => (
+        <span className="inline-flex items-center gap-1 text-sm text-gray-600">
+          <FolderOpen size={14} />
+          {info.getValue()?.name ?? "—"}
+        </span>
+      ),
     }),
 
-    /* 👁️ VIEWS COLUMN */
+    columnHelper.accessor("author", {
+      header: "Author",
+      cell: (info) => (
+        <span className="inline-flex items-center gap-1 text-sm text-gray-600">
+          <User size={14} />
+          {info.getValue()?.name ?? "—"}
+        </span>
+      ),
+    }),
+
     columnHelper.accessor("views", {
       header: "Views",
       cell: (info) => (
-        <div className="flex items-center gap-1 text-gray-700 font-medium">
-          <Eye size={14} className="text-gray-400" />
+        <span className="inline-flex items-center gap-1 text-sm">
+          <Eye size={14} />
           {info.getValue()}
-        </div>
+        </span>
       ),
-    }),
-
-    columnHelper.display({
-      id: "published",
-      header: "Published",
-      cell: (info) =>
-        info.row.original.publishedAt ? (
-          new Date(info.row.original.publishedAt).toLocaleDateString()
-        ) : (
-          <span className="text-gray-400">Draft</span>
-        ),
     }),
 
     columnHelper.display({
@@ -174,16 +160,14 @@ export default function PostsList() {
       cell: (info) => (
         <div className="flex gap-2">
           <button
-            onClick={() =>
-              router.push(`/admin/posts/edit/${info.row.original.id}`)
-            }
-            className="p-2 bg-blue-50 text-blue-600 rounded"
+            onClick={() => router.push(`/admin/posts/edit/${info.row.original.id}`)}
+            className="p-2 text-blue-600 hover:bg-blue-50 rounded"
           >
             <Edit size={16} />
           </button>
           <button
             onClick={() => handleDelete(info.row.original.id)}
-            className="p-2 bg-red-50 text-red-600 rounded"
+            className="p-2 text-red-600 hover:bg-red-50 rounded"
           >
             <Trash2 size={16} />
           </button>
@@ -198,136 +182,72 @@ export default function PostsList() {
     getCoreRowModel: getCoreRowModel(),
   })
 
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
-
-  if (loading) {
-    return (
-      <div className="h-screen flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Posts</h1>
+        <button
+          onClick={() => router.push("/admin/posts/create")}
+          className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg"
+        >
+          <Plus size={18} />
+          New Post
+        </button>
+      </div>
 
-        {/* HEADER */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Content Management</h1>
-          <button
-            onClick={() => router.push("/admin/posts/create")}
-            className="bg-indigo-600 text-white px-4 py-2 rounded flex items-center gap-2"
-          >
-            <Plus size={18} /> New Post
-          </button>
-        </div>
+      <div className="relative mb-6 max-w-md">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search posts..."
+          className="w-full pl-10 pr-4 py-2 border rounded-lg"
+        />
+      </div>
 
-        {/* QUICK ACTIONS */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <ActionCard
-            icon={<Plus />}
-            title="Create Post"
-            desc="Write a new article"
-            onClick={() => router.push("/admin/posts/create")}
-          />
-          <ActionCard
-            icon={<FolderOpen />}
-            title="Categories"
-            desc="Manage categories"
-            onClick={() => router.push("/admin/categories")}
-          />
-          <ActionCard
-            icon={<User />}
-            title="Authors"
-            desc="Manage authors"
-            onClick={() => router.push("/admin/authors")}
-          />
-        </div>
-
-        {/* TABLE */}
-        <div className="bg-white rounded-xl shadow overflow-hidden">
-          <div className="p-4 border-b">
-            <div className="relative max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search posts..."
-                className="pl-10 pr-4 py-2 border rounded w-full"
-              />
-            </div>
+      {loading ? (
+        <p>Loading posts...</p>
+      ) : (
+        <>
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                {table.getHeaderGroups().map((hg) => (
+                  <tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <th
+                        key={header.id}
+                        className="px-4 py-3 text-left text-sm font-semibold text-gray-600"
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <tbody>
+                {table.getRowModel().rows.map((row) => (
+                  <tr key={row.id} className="border-t">
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-4 py-3">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id}>
-                  {hg.headers.map((h) => (
-                    <th
-                      key={h.id}
-                      className="px-6 py-3 text-left text-xs font-semibold text-gray-600"
-                    >
-                      {flexRender(h.column.columnDef.header, h.getContext())}
-                    </th>
-                  ))}
-                </tr>
-              ))}
-            </thead>
-
-            <tbody className="divide-y">
-              {table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-gray-50">
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-6 py-4">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
 
           <AdminPagination
             currentPage={page}
-            totalPages={totalPages}
+            totalPages={Math.max(1, Math.ceil(total / PAGE_SIZE))}
             totalItems={total}
             pageSize={PAGE_SIZE}
-            itemLabel="posts"
             onPageChange={setPage}
-            className="border-0 border-t rounded-none shadow-none"
           />
-        </div>
-      </div>
+        </>
+      )}
     </div>
-  )
-}
-
-/* ================= ACTION CARD ================= */
-
-function ActionCard({
-  icon,
-  title,
-  desc,
-  onClick,
-}: {
-  icon: React.ReactNode
-  title: string
-  desc: string
-  onClick: () => void
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="p-5 bg-white rounded-xl shadow hover:shadow-md transition text-left flex gap-4"
-    >
-      <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
-        {icon}
-      </div>
-      <div>
-        <h3 className="font-semibold">{title}</h3>
-        <p className="text-sm text-gray-500">{desc}</p>
-      </div>
-    </button>
   )
 }

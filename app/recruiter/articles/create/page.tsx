@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useMutation } from "@/lib/apollo/hooks"
 import UploadBox from "@/components/UploadBox"
 import {
   fetchArticlePostingEligibility,
   type ContentLimitEligibility,
 } from "@/lib/packageLimits"
+import { getUploadUrl } from "@/lib/graphql/server"
+import { CREATE_RECRUITER_ARTICLE_MUTATION } from "@/lib/graphql/operations"
 
 export default function CreateRecruiterArticlePage() {
   const router = useRouter()
@@ -18,9 +21,10 @@ export default function CreateRecruiterArticlePage() {
   const [imageUrl, setImageUrl] = useState("")
   const [badge, setBadge] = useState("")
   const [uploading, setUploading] = useState(false)
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [eligibility, setEligibility] = useState<ContentLimitEligibility | null>(null)
+
+  const [createArticle, { loading }] = useMutation(CREATE_RECRUITER_ARTICLE_MUTATION)
 
   useEffect(() => {
     async function loadEligibility() {
@@ -35,8 +39,6 @@ export default function CreateRecruiterArticlePage() {
     loadEligibility()
   }, [])
 
-  /* ================= IMAGE UPLOAD ================= */
-
   const handleImageUpload = async (file: File) => {
     setUploading(true)
     setError("")
@@ -45,63 +47,45 @@ export default function CreateRecruiterArticlePage() {
       const formData = new FormData()
       formData.append("image", file)
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      )
+      const res = await fetch(getUploadUrl(), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: formData,
+      })
 
       if (!res.ok) throw new Error("Image upload failed")
 
       const data = await res.json()
       setImageUrl(data.imageUrl)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Upload failed")
     } finally {
       setUploading(false)
     }
   }
 
-  /* ================= SUBMIT ================= */
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError("")
 
     try {
-      const token = localStorage.getItem("token")
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recruiter/articles`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
+      await createArticle({
+        variables: {
+          input: {
             title,
-            excerpt,
+            excerpt: excerpt || null,
             content,
-            imageUrl,
-            badge: badge.trim() || null, // ✅ manual badge
-          }),
-        }
-      )
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Failed to create article")
-      }
+            imageUrl: imageUrl || null,
+            badge: badge.trim() || null,
+          },
+        },
+      })
 
       router.push("/recruiter/articles")
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to create article")
     }
   }
 
@@ -121,7 +105,6 @@ export default function CreateRecruiterArticlePage() {
       <form onSubmit={handleSubmit} className="space-y-4">
         {error && <p className="text-red-500">{error}</p>}
 
-        {/* TITLE */}
         <input
           type="text"
           placeholder="Article title"
@@ -131,7 +114,6 @@ export default function CreateRecruiterArticlePage() {
           required
         />
 
-        {/* EXCERPT */}
         <textarea
           placeholder="Short excerpt"
           className="w-full border p-2 rounded"
@@ -139,7 +121,6 @@ export default function CreateRecruiterArticlePage() {
           onChange={(e) => setExcerpt(e.target.value)}
         />
 
-        {/* CONTENT */}
         <textarea
           placeholder="Article content"
           className="w-full border p-2 rounded h-48"
@@ -148,7 +129,6 @@ export default function CreateRecruiterArticlePage() {
           required
         />
 
-        {/* 🔥 MANUAL BADGE INPUT */}
         <input
           type="text"
           placeholder="Badge (optional) e.g. FEATURED, TRENDING"
@@ -157,21 +137,19 @@ export default function CreateRecruiterArticlePage() {
           onChange={(e) => setBadge(e.target.value.toUpperCase())}
         />
 
-        {/* IMAGE UPLOAD */}
-      <UploadBox
-  label="Article Image"
-  value={imageUrl}
-  height="h-52"
-  accept="image/*"
-  onUpload={handleImageUpload}
-/>
+        <UploadBox
+          label="Article Image"
+          value={imageUrl}
+          height="h-52"
+          accept="image/*"
+          onUpload={handleImageUpload}
+        />
 
-{uploading && (
-  <p className="text-sm text-gray-500 mt-2">
-    Uploading image...
-  </p>
-)}
-
+        {uploading && (
+          <p className="text-sm text-gray-500 mt-2">
+            Uploading image...
+          </p>
+        )}
 
         <button
           type="submit"

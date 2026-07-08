@@ -1,36 +1,20 @@
 import Image from "next/image"
 import Link from "next/link"
-import type { Post } from "@/types/Post"
 import SupplierAds from "@/components/SupplierAds"
+import { fetchPostsList, categorySlugOf } from "@/lib/graphql/posts"
+import { resolveMediaUrl } from "@/lib/media"
 
 export default async function VideosPage() {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`,
-    { cache: "no-store" }
-  )
-
-  const data = await res.json()
-  const posts: Post[] = data.data || data
-
-  const slugOf = (post: Post) =>
-    typeof post.category === "object"
-      ? post.category?.slug?.toLowerCase()
-      : String(post.category || "").toLowerCase()
-
-  const getImageUrl = (url?: string | null) => {
-    if (!url) return "/placeholder.svg"
-    if (url.startsWith("http")) return url
-    return `${process.env.NEXT_PUBLIC_API_URL}${url}`
-  }
+  const posts = await fetchPostsList(50)
 
   const whatsNewPosts = posts
-    .filter((p) => slugOf(p).includes("whatsnew"))
+    .filter((p) => categorySlugOf(p).includes("whatsnew"))
     .slice(0, 5)
 
   const videoPosts = posts.filter(
     (p) =>
-      slugOf(p).includes("video") ||
-      slugOf(p).includes("videos")
+      categorySlugOf(p).includes("video") ||
+      categorySlugOf(p).includes("videos")
   )
 
   return (
@@ -87,7 +71,7 @@ export default async function VideosPage() {
                 {/* VIDEO THUMB */}
                 <div className="relative w-full h-[160px]">
                   <Image
-                    src={getImageUrl(post.imageUrl)}
+                    src={resolveMediaUrl(post.imageUrl)}
                     alt={post.title}
                     fill
                     className="object-cover rounded"

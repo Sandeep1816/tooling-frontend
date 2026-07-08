@@ -1,10 +1,10 @@
-
 "use client";
 
 import Link from "next/link";
 import Image from "next/image";
 import type { Post } from "@/types/Post";
 import SupplierAds from "@/components/SupplierAds";
+import { resolveMediaUrl } from "@/lib/media";
 
 /* ================= RIGHT SIDEBAR ================= */
 
@@ -41,11 +41,7 @@ function ExploreCategories() {
 
 function PopularNewsSidebar({ posts }: { posts: Post[] }) {
   const imageUrl = (post: Post) =>
-    post.imageUrl?.startsWith("http")
-      ? post.imageUrl
-      : post.imageUrl
-      ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-      : "/placeholder.jpg";
+    resolveMediaUrl(post.imageUrl);
 
   return (
     <div className="bg-white rounded-none p-6">
@@ -162,11 +158,7 @@ export default function FeaturedPostsSection({ posts }: FeaturedPostsSectionProp
               <div key={i} className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {row.map((post) => {
                   const img =
-                    post.imageUrl?.startsWith("http")
-                      ? post.imageUrl
-                      : post.imageUrl
-                      ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-                      : "/placeholder.svg";
+                    resolveMediaUrl(post.imageUrl);
 
                   return (
                     <article

@@ -1,4 +1,6 @@
 "use client"
+
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 
 import { useState } from "react"
@@ -48,7 +50,7 @@ export default function LatestIssueCarousel({ posts }: LatestIssueCarouselProps)
                 post.imageUrl && post.imageUrl.startsWith("http")
                   ? post.imageUrl
                   : post.imageUrl
-                    ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
+                    ? `resolveMediaUrl(post.imageUrl)`
                     : "/placeholder.svg"
 
               return (

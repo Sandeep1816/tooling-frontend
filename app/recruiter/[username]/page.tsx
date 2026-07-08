@@ -3,6 +3,9 @@ import Image from "next/image"
 import { MapPin, Link2, CheckCircle } from "lucide-react"
 import Link from "next/link"
 import RecruiterJobPosts from "./RecruiterJobPosts"
+import { graphqlRequest } from "@/lib/graphql/server"
+import { USER_BY_USERNAME_QUERY } from "@/lib/graphql/queries"
+import { resolveMediaUrl } from "@/lib/media"
 
 type Recruiter = {
   username: string
@@ -17,15 +20,20 @@ type Recruiter = {
 export default async function RecruiterProfilePage(props: {
   params: Promise<{ username: string }>
 }) {
-  // ✅ Next.js 15+
   const { username } = await props.params
 
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/recruiters/${username}`,
-    { cache: "no-store" }
-  )
+  let recruiter: Recruiter | null = null
 
-  if (!res.ok) {
+  try {
+    const data = await graphqlRequest<{
+      userByUsername: Recruiter | null
+    }>(USER_BY_USERNAME_QUERY, { username })
+    recruiter = data.userByUsername
+  } catch {
+    recruiter = null
+  }
+
+  if (!recruiter) {
     return (
       <div className="p-10 text-center text-gray-600">
         Recruiter profile not found
@@ -33,7 +41,9 @@ export default async function RecruiterProfilePage(props: {
     )
   }
 
-  const recruiter: Recruiter = await res.json()
+  const avatarSrc = recruiter.avatarUrl
+    ? resolveMediaUrl(recruiter.avatarUrl)
+    : "https://i.pravatar.cc/160"
 
   return (
     <div className="bg-[#f3f2ef] min-h-screen">
@@ -48,10 +58,7 @@ export default async function RecruiterProfilePage(props: {
             {/* Avatar */}
            <div className="relative w-36 h-36">
   <Image
-    src={
-      recruiter.avatarUrl ||
-      "https://i.pravatar.cc/160"
-    }
+    src={avatarSrc}
     alt={recruiter.username}
     fill
     className="rounded-full border-4 border-white object-cover"
@@ -141,7 +148,6 @@ export default async function RecruiterProfilePage(props: {
             </div>
           </Section>
 
-          {/* 🔥 LINKEDIN-STYLE ACTIVITY FEED */}
           <Section title="Activity">
             <RecruiterJobPosts username={username} />
           </Section>
@@ -171,8 +177,6 @@ export default async function RecruiterProfilePage(props: {
     </div>
   )
 }
-
-/* ================= SECTION COMPONENT ================= */
 
 function Section({
   title,

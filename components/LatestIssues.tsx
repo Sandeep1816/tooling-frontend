@@ -1,9 +1,13 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import type { Post } from "@/types/Post"
+import { categorySlugOf } from "@/lib/graphql/posts"
+import { graphqlRequest } from "@/lib/graphql/server"
+import { POSTS_LIST_QUERY } from "@/lib/graphql/queries"
 
 interface LatestIssuesProps {
   posts?: Post[]
@@ -32,21 +36,18 @@ export default function LatestIssues({
 
   useEffect(() => {
     if (!initialPosts.length) {
-      ;(async () => {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`
-        )
-        const data = await res.json()
-        const all: Post[] = data.data || data
-
-        const filtered = all.filter((p) =>
-          typeof p.category === "object"
-            ? p.category?.slug?.includes("latest-issue")
-            : false
-        )
-
-        setPosts(filtered.slice(0, 3))
-      })()
+      graphqlRequest<{ posts: { edges: { node: Post }[] } }>(
+        POSTS_LIST_QUERY,
+        { first: 50 }
+      )
+        .then((data) => {
+          const all = data.posts.edges.map((e) => e.node)
+          const filtered = all.filter((p) =>
+            categorySlugOf(p).includes("latest-issue")
+          )
+          setPosts(filtered.slice(0, 3))
+        })
+        .catch(console.error)
     } else {
       setPosts(initialPosts.slice(0, 3))
     }
@@ -117,7 +118,7 @@ export default function LatestIssues({
                       src={
                         post.imageUrl?.startsWith("http")
                           ? post.imageUrl
-                          : `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
+                          : `resolveMediaUrl(post.imageUrl)`
                       }
                       alt={post.title}
                       fill

@@ -1,21 +1,20 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
+import { useQuery } from "@/lib/apollo/hooks"
+import { MAGAZINE_REGISTRATIONS_QUERY } from "@/lib/graphql/operations"
 
 export default function RegistrationsPage() {
-  const { id } = useParams()
-  const [data, setData] = useState<any[]>([])
+  const { id } = useParams<{ id: string }>()
 
-  useEffect(() => {
-    const token = localStorage.getItem("token")
+  const { data, loading } = useQuery(MAGAZINE_REGISTRATIONS_QUERY, {
+    variables: { magazineId: id },
+    skip: !id,
+  })
 
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines/${id}/registrations`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.json())
-      .then(setData)
-  }, [id])
+  const registrations = data?.magazineRegistrations ?? []
+
+  if (loading) return <div className="p-10">Loading...</div>
 
   return (
     <div className="p-10">
@@ -31,9 +30,18 @@ export default function RegistrationsPage() {
           </tr>
         </thead>
         <tbody>
-          {data.map((r) => (
+          {registrations.map((r: {
+            id: string
+            firstName: string
+            lastName: string
+            email: string
+            companyName?: string
+            country?: string
+          }) => (
             <tr key={r.id}>
-              <td className="p-2 border">{r.firstName} {r.lastName}</td>
+              <td className="p-2 border">
+                {r.firstName} {r.lastName}
+              </td>
               <td className="p-2 border">{r.email}</td>
               <td className="p-2 border">{r.companyName}</td>
               <td className="p-2 border">{r.country}</td>

@@ -1,6 +1,7 @@
-// banner.tsx
 import Image from "next/image";
 import Link from "next/link";
+import { graphqlRequest, getBannerClickUrl } from "@/lib/graphql/server";
+import { BANNERS_BY_PLACEMENT_QUERY } from "@/lib/graphql/queries";
 
 type BannerProps = {
   placement:
@@ -18,24 +19,20 @@ type BannerProps = {
 
 export default async function Banner({ placement }: BannerProps) {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/banners?placement=${placement}`,
-      {
-        cache: "no-store",
-      }
-    );
+    const data = await graphqlRequest<{
+      banners: {
+        id: string;
+        title: string;
+        imageUrl: string;
+        targetUrl?: string | null;
+      }[];
+    }>(BANNERS_BY_PLACEMENT_QUERY, { placement });
 
-    if (!res.ok) return null;
-
-    const data = await res.json();
-
-    const banner = Array.isArray(data)
-      ? data[0]
-      : Array.isArray(data.data)
-      ? data.data[0]
-      : null;
+    const banner = data.banners[0] ?? null;
 
     if (!banner) return null;
+
+    const clickUrl = getBannerClickUrl(banner.id);
 
     // HOME_TOP and ARTICLE_TOP: fixed 728x90 (responsive below 728px)
     if (placement === "HOME_TOP" || placement === "ARTICLE_TOP") {
@@ -48,7 +45,7 @@ export default async function Banner({ placement }: BannerProps) {
             >
               
               <Link
-                href={banner.targetUrl || "#"}
+                href={clickUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full h-full"
@@ -108,7 +105,7 @@ export default async function Banner({ placement }: BannerProps) {
         <section className="py-10 px-6" style={{ backgroundColor: "#F8F9FA" }}>
           <div className="max-w-[970px] w-full mx-auto flex justify-center">
             <Link
-              href={banner.targetUrl || "#"}
+              href={clickUrl}
               target="_blank"
               rel="noopener noreferrer"
             >
@@ -136,7 +133,7 @@ export default async function Banner({ placement }: BannerProps) {
       <section className="py-6">
         <div className="max-w-[970px] w-full mx-auto px-6 flex justify-center">
           <Link
-            href={banner.targetUrl || "#"}
+            href={clickUrl}
             target="_blank"
             rel="noopener noreferrer"
           >

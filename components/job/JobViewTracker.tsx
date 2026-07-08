@@ -1,14 +1,15 @@
 "use client"
 
 import { useEffect } from "react"
+import { useMutation } from "@/lib/apollo/hooks"
+import { INCREMENT_JOB_VIEW_MUTATION } from "@/lib/graphql/operations"
 
 export default function JobViewTracker({ slug }: { slug: string }) {
+  const [incrementJobView] = useMutation(INCREMENT_JOB_VIEW_MUTATION)
+
   useEffect(() => {
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/${slug}/view`,
-      { method: "POST" }
-    )
-  }, [slug])
+    incrementJobView({ variables: { slug } }).catch(console.error)
+  }, [slug, incrementJobView])
 
   return null
 }

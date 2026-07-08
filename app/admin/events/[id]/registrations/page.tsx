@@ -1,10 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
+import { useQuery } from "@/lib/apollo/hooks"
+import { EVENT_REGISTRATIONS_QUERY } from "@/lib/graphql/operations"
 
 type Registration = {
-  id: number
+  id: string
   fullName: string
   email: string
   phone: string
@@ -15,33 +16,14 @@ type Registration = {
 }
 
 export default function EventRegistrationsPage() {
-  const { id } = useParams()
-  const [registrations, setRegistrations] = useState<Registration[]>([])
-  const [loading, setLoading] = useState(true)
+  const { id } = useParams<{ id: string }>()
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/events/admin/${id}/registrations`,
-          {
-            headers: {
-              Authorization: `Bearer ${localStorage.getItem("token")}`,
-            },
-          }
-        )
+  const { data, loading } = useQuery(EVENT_REGISTRATIONS_QUERY, {
+    variables: { eventId: id },
+    skip: !id,
+  })
 
-        const data = await res.json()
-        setRegistrations(data)
-      } catch (err) {
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchData()
-  }, [id])
+  const registrations: Registration[] = data?.eventRegistrations ?? []
 
   if (loading) return <div className="p-8">Loading...</div>
 
@@ -65,7 +47,7 @@ export default function EventRegistrationsPage() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {registrations.map(reg => (
+            {registrations.map((reg) => (
               <tr key={reg.id}>
                 <td className="px-4 py-3">{reg.fullName}</td>
                 <td className="px-4 py-3">{reg.email}</td>

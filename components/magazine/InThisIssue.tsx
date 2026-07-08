@@ -2,36 +2,26 @@ import Link from "next/link"
 import SupplierAds from "@/components/SupplierAds"
 import Image from "next/image"
 import type { Post } from "@/types/Post"
+import { resolveMediaUrl } from "@/lib/media"
 
 type Props = {
   posts: Post[]
 }
 
 export default function InThisIssue({ posts }: Props) {
-
   const slugOf = (post: Post) =>
     typeof post.category === "object"
       ? post.category?.slug?.toLowerCase()
       : String(post.category || "").toLowerCase()
 
-  const getImageUrl = (url?: string | null) => {
-    if (!url) return "/placeholder.svg"
-    if (url.startsWith("http")) return url
+  const normalize = (str: string) =>
+    str.replace(/[-_\s]/g, "").toLowerCase()
 
-    const base = process.env.NEXT_PUBLIC_API_URL || ""
-    return `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`
-  }
+  const inThisIssuePosts = posts.filter((p) =>
+    normalize(slugOf(p)).includes("inthisissue")
+  )
 
-  /* Filter In This Issue Posts */
-const normalize = (str: string) =>
-  str.replace(/[-_\s]/g, "").toLowerCase()
-
-const inThisIssuePosts = posts.filter(p =>
-  normalize(slugOf(p)).includes("inthisissue")
-)
-
-const remainingIssues = inThisIssuePosts
-
+  const remainingIssues = inThisIssuePosts
 
   if (!remainingIssues.length) return null
 
@@ -49,7 +39,7 @@ const remainingIssues = inThisIssuePosts
             <article key={post.id}>
              <div className="relative w-full aspect-[16/9] mb-4">
   <Image
-    src={getImageUrl(post.imageUrl)}
+    src={resolveMediaUrl(post.imageUrl)}
     alt={post.title}
     fill
     className="object-cover rounded"

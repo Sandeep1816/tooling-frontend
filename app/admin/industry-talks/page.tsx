@@ -1,8 +1,10 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import {
   createColumnHelper,
   flexRender,
@@ -19,11 +21,13 @@ import {
   ChevronRight,
   Eye,
 } from "lucide-react"
+import { DELETE_POST_MUTATION, POSTS_QUERY } from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
 
 /* ================= TYPES ================= */
 
 type Post = {
-  id: number
+  id: string
   title: string
   slug: string
   imageUrl?: string
@@ -38,12 +42,28 @@ const PAGE_SIZE = 10
 export default function IndustryTalksPage() {
   const router = useRouter()
 
-  const [posts, setPosts] = useState<Post[]>([])
-  const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
-  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
+
+  const { data, loading, refetch } = useQuery(POSTS_QUERY, {
+    variables: {
+      first: PAGE_SIZE,
+      page,
+      filter: {
+        categorySlug: "industry-talks",
+        ...(debouncedSearch ? { search: debouncedSearch } : {}),
+      },
+      sort: { field: "PUBLISHED_AT", order: "DESC" },
+    },
+    fetchPolicy: "network-only",
+  })
+
+  const [deletePost] = useMutation(DELETE_POST_MUTATION)
+
+  const posts: Post[] =
+    data?.posts?.edges?.map((e: { node: Post }) => e.node) ?? []
+  const total = data?.posts?.totalCount ?? 0
 
   /* ================= DEBOUNCE ================= */
 
@@ -52,50 +72,24 @@ export default function IndustryTalksPage() {
     return () => clearTimeout(t)
   }, [search])
 
-  /* ================= FETCH INDUSTRY TALKS ONLY ================= */
-
   useEffect(() => {
-    async function load() {
-      setLoading(true)
-
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/posts?page=${page}&limit=${PAGE_SIZE}&q=${debouncedSearch}&category=industry-talks`
-        )
-
-        const json = await res.json()
-
-        setPosts(json.data || [])
-        setTotal(json.meta?.total || 0)
-      } catch (error) {
-        console.error("Failed to load industry talks:", error)
-        setPosts([])
-        setTotal(0)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    load()
-  }, [page, debouncedSearch])
+    setPage(1)
+  }, [debouncedSearch])
 
   /* ================= DELETE ================= */
 
-  async function handleDelete(id: number) {
+  async function handleDelete(id: string) {
     const token = localStorage.getItem("token")
     if (!token) return alert("Unauthorized")
 
     if (!confirm("Delete this industry talk?")) return
 
-    await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/posts/${id}`,
-      {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      }
-    )
-
-    setPosts((p) => p.filter((x) => x.id !== id))
+    try {
+      await deletePost({ variables: { id } })
+      await refetch()
+    } catch (err) {
+      alert(getGraphQLErrorMessage(err))
+    }
   }
 
   /* ================= TABLE ================= */
@@ -111,9 +105,7 @@ export default function IndustryTalksPage() {
         return url ? (
           <Image
             src={
-              url.startsWith("http")
-                ? url
-                : `${process.env.NEXT_PUBLIC_API_URL}${url}`
+              resolveMediaUrl(url)
             }
             width={64}
             height={64}

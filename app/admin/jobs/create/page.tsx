@@ -2,11 +2,11 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useMutation } from "@/lib/apollo/hooks"
+import { CREATE_JOB_MUTATION } from "@/lib/graphql/operations"
 
 export default function CreateJobPage() {
   const router = useRouter()
-
-  const [loading, setLoading] = useState(false)
 
   const [form, setForm] = useState({
     title: "",
@@ -18,47 +18,34 @@ export default function CreateJobPage() {
     linkedinUrl: "",
   })
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null
+  const [createJob, { loading }] = useMutation(CREATE_JOB_MUTATION)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/jobs`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            ...form,
+      await createJob({
+        variables: {
+          input: {
+            title: form.title,
             slug: form.title
               .toLowerCase()
               .replace(/\s+/g, "-")
               .replace(/[^\w-]+/g, ""),
-          }),
-        }
-      )
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        alert(data.error || "Failed to create job")
-        setLoading(false)
-        return
-      }
+            description: form.description,
+            employmentType: form.employmentType,
+            location: form.location,
+            companyName: form.companyName || null,
+            applyUrl: form.applyUrl || null,
+            linkedinUrl: form.linkedinUrl || null,
+          },
+        },
+      })
 
       router.push("/admin/jobs")
     } catch (err) {
       console.error(err)
       alert("Something went wrong")
-      setLoading(false)
     }
   }
 
@@ -135,8 +122,6 @@ export default function CreateJobPage() {
     </div>
   )
 }
-
-/* ================= COMPONENTS ================= */
 
 function Input({
   label,

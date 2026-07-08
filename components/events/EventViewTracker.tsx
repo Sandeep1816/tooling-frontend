@@ -1,14 +1,15 @@
 "use client"
 
 import { useEffect } from "react"
+import { useMutation } from "@/lib/apollo/hooks"
+import { INCREMENT_EVENT_VIEW_MUTATION } from "@/lib/graphql/operations"
 
 export default function EventViewTracker({ slug }: { slug: string }) {
+  const [incrementEventView] = useMutation(INCREMENT_EVENT_VIEW_MUTATION)
+
   useEffect(() => {
-    fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/events/${slug}/view`,
-      { method: "POST" }
-    )
-  }, [slug])
+    incrementEventView({ variables: { slug } }).catch(console.error)
+  }, [slug, incrementEventView])
 
   return null
 }

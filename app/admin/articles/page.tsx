@@ -1,91 +1,47 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import { FileText, Eye, Share2, Check, X } from "lucide-react"
-
-/* ================= TYPES ================= */
+import {
+  ADMIN_ARTICLES_QUERY,
+  APPROVE_ARTICLE_MUTATION,
+  REJECT_ARTICLE_MUTATION,
+} from "@/lib/graphql/operations"
 
 type Company = {
-  id: number
+  id: string
   name: string
 }
 
 type Article = {
-  id: number
+  id: string
   title: string
   views: number
   shares: number
-  Company?: {
-    id: number
-    name: string
-  }
+  company?: Company
 }
 
-/* ================= PAGE ================= */
-
 export default function AdminArticlesPage() {
-  const [articles, setArticles] = useState<Article[]>([])
-  const [selectedCompanyId, setSelectedCompanyId] = useState<number | null>(null)
+  const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null)
   const [status, setStatus] = useState<"PENDING" | "APPROVED">("APPROVED")
-  const [loadingId, setLoadingId] = useState<number | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [loadingId, setLoadingId] = useState<string | null>(null)
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null
+  const { data, loading, refetch } = useQuery(ADMIN_ARTICLES_QUERY, {
+    variables: { status },
+  })
 
-  /* ================= FETCH ================= */
+  const [approveArticle] = useMutation(APPROVE_ARTICLE_MUTATION)
+  const [rejectArticle] = useMutation(REJECT_ARTICLE_MUTATION)
 
-  const fetchArticles = async () => {
-    if (!token) return
+  const articles: Article[] = data?.adminArticles ?? []
 
-    try {
-      setLoading(true)
-
-      const endpoint =
-        status === "PENDING"
-          ? "/api/admin/articles/pending"
-          : "/api/admin/articles/adminapproved"
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}${endpoint}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      )
-
-      const data = await res.json()
-      setArticles(Array.isArray(data) ? data : [])
-      setSelectedCompanyId(null)
-    } catch (err) {
-      console.error("Fetch error:", err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchArticles()
-  }, [status])
-
-  /* ================= APPROVE ================= */
-
-  const handleApprove = async (id: number) => {
-    if (!token) return
-
+  const handleApprove = async (id: string) => {
     try {
       setLoadingId(id)
-
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/articles/${id}/approve`,
-        {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      )
-
-      await fetchArticles()
+      await approveArticle({ variables: { id } })
+      await refetch()
+      setSelectedCompanyId(null)
     } catch (error) {
       console.error("Approval failed", error)
     } finally {
@@ -93,31 +49,18 @@ export default function AdminArticlesPage() {
     }
   }
 
-  /* ================= REJECT ================= */
-
-  const handleReject = async (id: number) => {
-    if (!token) return
-
+  const handleReject = async (id: string) => {
     try {
       setLoadingId(id)
-
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/articles/${id}/reject`,
-        {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      )
-
-      await fetchArticles()
+      await rejectArticle({ variables: { id } })
+      await refetch()
+      setSelectedCompanyId(null)
     } catch (error) {
       console.error("Reject failed", error)
     } finally {
       setLoadingId(null)
     }
   }
-
-  /* ================= STATS ================= */
 
   const totalArticles = articles.length
 
@@ -131,21 +74,19 @@ export default function AdminArticlesPage() {
     [articles]
   )
 
-  /* ================= GROUP BY COMPANY ================= */
-
   const companies = useMemo(() => {
-    const map = new Map<number, { company: Company; count: number }>()
+    const map = new Map<string, { company: Company; count: number }>()
 
     articles.forEach(article => {
-      if (!article.Company) return
+      if (!article.company) return
 
-      if (!map.has(article.Company.id)) {
-        map.set(article.Company.id, {
-          company: article.Company,
+      if (!map.has(article.company.id)) {
+        map.set(article.company.id, {
+          company: article.company,
           count: 1,
         })
       } else {
-        map.get(article.Company.id)!.count++
+        map.get(article.company.id)!.count++
       }
     })
 
@@ -154,15 +95,11 @@ export default function AdminArticlesPage() {
 
   const filteredArticles = useMemo(() => {
     if (!selectedCompanyId) return []
-    return articles.filter(a => a.Company?.id === selectedCompanyId)
+    return articles.filter(a => a.company?.id === selectedCompanyId)
   }, [articles, selectedCompanyId])
-
-  /* ================= UI ================= */
 
   return (
     <div className="min-h-screen bg-[#F4F6FA] p-8 space-y-8">
-
-      {/* HEADER */}
       <div>
         <h1 className="text-2xl font-bold text-[#0A2B57]">
           Article Moderation
@@ -172,19 +109,20 @@ export default function AdminArticlesPage() {
         </p>
       </div>
 
-      {/* STATS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard label="Articles Posted" value={totalArticles} icon={<FileText />} color="bg-blue-600" />
         <StatCard label="Articles Viewed" value={totalViews} icon={<Eye />} color="bg-green-600" />
         <StatCard label="Articles Shared" value={totalShares} icon={<Share2 />} color="bg-purple-600" />
       </div>
 
-      {/* TABS */}
       <div className="flex gap-3">
-        {["PENDING", "APPROVED"].map(tab => (
+        {(["PENDING", "APPROVED"] as const).map(tab => (
           <button
             key={tab}
-            onClick={() => setStatus(tab as any)}
+            onClick={() => {
+              setStatus(tab)
+              setSelectedCompanyId(null)
+            }}
             className={`px-5 py-2 rounded-md text-sm font-medium transition
               ${
                 status === tab
@@ -198,10 +136,7 @@ export default function AdminArticlesPage() {
         ))}
       </div>
 
-      {/* CONTENT */}
       <div className="grid grid-cols-12 gap-6">
-
-        {/* COMPANIES */}
         <aside className="col-span-3 bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <h2 className="font-semibold text-[#0A2B57] mb-4">Companies</h2>
           <ul className="space-y-2">
@@ -223,7 +158,6 @@ export default function AdminArticlesPage() {
           </ul>
         </aside>
 
-        {/* ARTICLES */}
         <main className="col-span-9 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           {loading && <p className="text-gray-500">Loading articles...</p>}
 
@@ -275,8 +209,6 @@ export default function AdminArticlesPage() {
     </div>
   )
 }
-
-/* ================= STAT CARD ================= */
 
 function StatCard({
   label,

@@ -5,18 +5,20 @@ import Link from "next/link";
 import { CheckCircle, MapPin } from "lucide-react";
 
 type Company = {
-  id: number;
+  id: string;
   name: string;
   slug: string;
   tagline?: string;
-  industry?: string;
+  industry?: string | { id?: string; name?: string; slug?: string } | null;
   location?: string;
+  address?: string;
   companySize?: string;
   website?: string;
   logoUrl?: string;
   coverImageUrl?: string;
-  followers: number;
+  followerCount?: number;
   isVerified: boolean;
+  isFollowing?: boolean;
 };
 
 type CompanyHeaderProps = {
@@ -30,6 +32,12 @@ export default function CompanyHeader({
   isFollowing = false,
   onFollow,
 }: CompanyHeaderProps) {
+  const followers = company.followerCount ?? 0;
+  const industryName =
+    typeof company.industry === "object"
+      ? company.industry?.name
+      : company.industry;
+
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
 
@@ -82,8 +90,8 @@ export default function CompanyHeader({
 
           <div className="mt-2 text-sm text-gray-500 space-y-1">
 
-            {company.industry && (
-              <p>{company.industry}</p>
+            {industryName && (
+              <p>{industryName}</p>
             )}
 
             {company.location && (
@@ -97,7 +105,7 @@ export default function CompanyHeader({
               <p>{company.companySize}</p>
             )}
 
-            <p>{company.followers} followers</p>
+            <p>{followers} followers</p>
 
           </div>
 

@@ -3,7 +3,16 @@
 import dynamic from "next/dynamic"
 import { useEffect, useState, FormEvent, ChangeEvent } from "react"
 import { useRouter, useParams } from "next/navigation"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import UploadBox from "@/components/UploadBox"
+import {
+  AUTHORS_QUERY,
+  CATEGORIES_QUERY,
+  POST_BY_ID_QUERY,
+  UPDATE_POST_MUTATION,
+} from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
+import { getUploadUrl } from "@/lib/graphql/server"
 
 import "react-quill-new/dist/quill.snow.css"
 const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false })
@@ -25,59 +34,59 @@ export default function EditIndustryTalkPage() {
   })
 
   const [authors, setAuthors] = useState<any[]>([])
-  const [industryCategoryId, setIndustryCategoryId] = useState<number | null>(null)
+  const [industryCategoryId, setIndustryCategoryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [initializing, setInitializing] = useState(true)
   const [message, setMessage] = useState("")
 
-  /* ================= LOAD INITIAL DATA ================= */
+  const { data: postData, loading: postLoading } = useQuery(POST_BY_ID_QUERY, {
+    variables: { id: String(id) },
+    skip: !id,
+  })
+  const { data: authorsData } = useQuery(AUTHORS_QUERY)
+  const { data: categoriesData } = useQuery(CATEGORIES_QUERY)
+  const [updatePost] = useMutation(UPDATE_POST_MUTATION)
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [postRes, authorsRes, categoriesRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/posts/${id}`),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/authors`),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/categories`)
-        ])
+    if (authorsData?.authors) setAuthors(authorsData.authors)
+  }, [authorsData])
 
-        const post = await postRes.json()
-        const authorsData = await authorsRes.json()
-        const categoriesData = await categoriesRes.json()
+  useEffect(() => {
+    if (!categoriesData?.categories) return
 
-        setAuthors(authorsData.data || authorsData)
+    const industry = categoriesData.categories.find(
+      (cat: { slug?: string }) => cat.slug?.toLowerCase() === "industry-talks"
+    )
 
-        const categories = categoriesData.data || categoriesData
-        const industry = categories.find(
-          (cat: any) => cat.slug?.toLowerCase() === "industry-talks"
-        )
-
-        if (industry) {
-          setIndustryCategoryId(industry.id)
-        }
-
-        // PREFILL FORM
-        setForm({
-          title: post.title || "",
-          slug: post.slug || "",
-          badge: post.badge || "",
-          imageUrl: post.imageUrl || "",
-          excerpt: post.excerpt || "",
-          content: post.content || "",
-          authorId: post.authorId?.toString() || "",
-          youtubeUrl: post.youtubeUrl || "",
-        })
-      } catch (err) {
-        console.error(err)
-        setMessage("Failed to load post data")
-      } finally {
-        setInitializing(false)
-      }
+    if (industry) {
+      setIndustryCategoryId(industry.id)
     }
+  }, [categoriesData])
 
-    if (id) loadData()
-  }, [id])
+  useEffect(() => {
+    const post = postData?.postById
+    if (!post) return
+
+    setForm({
+      title: post.title || "",
+      slug: post.slug || "",
+      badge: post.badge || "",
+      imageUrl: post.imageUrl || "",
+      excerpt: post.excerpt || "",
+      content: post.content || "",
+      authorId: String(post.authorId || post.author?.id || ""),
+      youtubeUrl: post.youtubeUrl || "",
+    })
+    setInitializing(false)
+  }, [postData])
+
+  useEffect(() => {
+    if (!postLoading && !postData?.postById && id) {
+      setInitializing(false)
+      setMessage("Failed to load post data")
+    }
+  }, [postLoading, postData, id])
 
   /* ================= HANDLERS ================= */
 
@@ -98,10 +107,10 @@ export default function EditIndustryTalkPage() {
       const formData = new FormData()
       formData.append("image", file)
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-        { method: "POST", body: formData }
-      )
+      const res = await fetch(getUploadUrl(), {
+        method: "POST",
+        body: formData,
+      })
 
       const data = await res.json()
 
@@ -134,38 +143,34 @@ export default function EditIndustryTalkPage() {
       form.content.replace(/<[^>]+>/g, "").substring(0, 160) + "..."
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/posts/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          },
-          body: JSON.stringify({
-            ...form,
+      await updatePost({
+        variables: {
+          id: String(id),
+          input: {
+            title: form.title,
+            slug: form.slug,
+            badge: form.badge || null,
+            imageUrl: form.imageUrl || null,
             excerpt,
-            authorId: Number(form.authorId),
-            categoryId: industryCategoryId,
-          }),
-        }
-      )
+            content: form.content,
+            youtubeUrl: form.youtubeUrl || null,
+            authorId: form.authorId || null,
+            categoryId: industryCategoryId || undefined,
+          },
+        },
+        context: {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      })
 
-      const data = await res.json()
+      setMessage("Industry Talk updated successfully!")
+      setTimeout(() => {
+        router.push("/admin/industry-talks")
+      }, 1000)
+    } catch (err) {
+      setMessage(getGraphQLErrorMessage(err))
+    } finally {
       setLoading(false)
-
-      if (res.ok) {
-        setMessage("Industry Talk updated successfully!")
-
-        setTimeout(() => {
-          router.push("/admin/industry-talks")
-        }, 1000)
-      } else {
-        setMessage(data?.error || "Update failed")
-      }
-    } catch {
-      setLoading(false)
-      setMessage("Network error")
     }
   }
 

@@ -2,6 +2,13 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useMutation } from "@/lib/apollo/hooks"
+import {
+  CREATE_COMPANY_MUTATION,
+  UPDATE_USER_MUTATION,
+} from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
+import { getSessionUser } from "@/lib/auth/session"
 
 export default function RecruiterOnboardingPage() {
   const router = useRouter()
@@ -11,8 +18,11 @@ export default function RecruiterOnboardingPage() {
   const [companyName, setCompanyName] = useState("")
   const [location, setLocation] = useState("")
   const [website, setWebsite] = useState("")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  const [createCompany, { loading: creatingCompany }] = useMutation(CREATE_COMPANY_MUTATION)
+  const [updateUser, { loading: updatingUser }] = useMutation(UPDATE_USER_MUTATION)
+  const loading = creatingCompany || updatingUser
 
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem("user") || "{}")
@@ -30,78 +40,58 @@ export default function RecruiterOnboardingPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
-    setLoading(true)
 
     try {
-      const token = localStorage.getItem("token")
-      if (!token) {
+      const user = getSessionUser()
+      if (!user?.id) {
         router.push("/login")
         return
       }
 
-      // 1️⃣ Create company
-      const companyRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/companies`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
+      const { data } = await createCompany({
+        variables: {
+          input: {
             name: companyName,
-            website,
-            location,
-          }),
-        }
-      )
-
-      const company = await companyRes.json()
-
-      if (!companyRes.ok) {
-        setError(company.error || "Failed to create company")
-        return
-      }
-
-      // 2️⃣ Update recruiter profile (company is already linked on create)
-      const profileRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recruiters/profile`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+            website: website || null,
+            location: location || null,
           },
-          body: JSON.stringify({
-            fullName,
-            headline,
-            companyId: company.id,
-          }),
-        }
-      )
+        },
+      })
 
-      const profileData = await profileRes.json().catch(() => ({}))
-
-      if (!profileRes.ok) {
-        setError(profileData.error || "Failed to update recruiter profile")
+      const company = data?.createCompany
+      if (!company?.id) {
+        setError("Failed to create company")
         return
       }
 
-      // 3️⃣ Update localStorage user
-      const user = JSON.parse(localStorage.getItem("user") || "{}")
+      const { data: userData } = await updateUser({
+        variables: {
+          id: user.id,
+          input: {
+            fullName,
+            headline: headline || undefined,
+            companyId: company.id,
+            isOnboarded: true,
+          },
+        },
+      })
+
+      if (!userData?.updateUser) {
+        setError("Failed to update recruiter profile")
+        return
+      }
+
       const updatedUser = {
         ...user,
         companyId: company.id,
         isOnboarded: true,
-        fullName: profileData.fullName || fullName,
+        fullName: userData.updateUser.fullName || fullName,
       }
       localStorage.setItem("user", JSON.stringify(updatedUser))
 
       router.push("/recruiter/dashboard")
     } catch (err) {
-      setError("Something went wrong. Please try again.")
-    } finally {
-      setLoading(false)
+      setError(getGraphQLErrorMessage(err))
     }
   }
 

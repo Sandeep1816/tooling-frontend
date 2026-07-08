@@ -1,14 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import { MapPin, Users, Eye, Pencil } from "lucide-react"
 import Link from "next/link"
+import { useQuery } from "@/lib/apollo/hooks"
 import { useRecruiterGuard } from "@/lib/useRecruiterGuard"
 import PostJobButton from "@/components/recruiter/PostJobButton"
-import { fetchJobPostingEligibility, type JobPostingEligibility } from "@/lib/jobPosting"
+import {
+  JOB_POSTING_ELIGIBILITY_QUERY,
+  MY_RECRUITER_JOBS_QUERY,
+} from "@/lib/graphql/operations"
+import type { JobPostingEligibility } from "@/lib/jobPosting"
 
 type Job = {
-  id: number
+  id: string
   title: string
   slug: string
   location: string
@@ -16,103 +20,66 @@ type Job = {
   views: number
   isActive?: boolean
   employmentType?: string
-  _count?: {
-    JobApplication: number
-  }
+  applicationCount?: number
 }
 
 export default function MyJobsPage() {
   const allowed = useRecruiterGuard()
 
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [loading, setLoading] = useState(true)
-  const [eligibility, setEligibility] = useState<JobPostingEligibility | null>(null)
+  const { data: jobsData, loading: jobsLoading } = useQuery(MY_RECRUITER_JOBS_QUERY, {
+    skip: !allowed,
+  })
 
-  useEffect(() => {
-    if (!allowed) return
+  const { data: eligibilityData } = useQuery(JOB_POSTING_ELIGIBILITY_QUERY, {
+    skip: !allowed,
+  })
 
-    async function loadJobs() {
-      try {
-        const token = localStorage.getItem("token")
-
-        if (!token) {
-          console.error("Auth token missing")
-          return
-        }
-
-        const [jobsRes, eligibilityData] = await Promise.all([
-          fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/recruiter/me`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-              cache: "no-store",
-            }
-          ),
-          fetchJobPostingEligibility(token),
-        ])
-
-        if (!jobsRes.ok) {
-          throw new Error("Failed to fetch recruiter jobs")
-        }
-
-        const data = await jobsRes.json()
-        setJobs(Array.isArray(data) ? data : [])
-        setEligibility(eligibilityData)
-      } catch (err) {
-        console.error("Failed to load recruiter jobs", err)
-        setJobs([])
-      } finally {
-        setLoading(false)
+  const jobs: Job[] = jobsData?.myRecruiterJobs ?? []
+  const eligibility: JobPostingEligibility | null = eligibilityData?.jobPostingEligibility
+    ? {
+        ...eligibilityData.jobPostingEligibility,
+        planLabel:
+          eligibilityData.jobPostingEligibility.plan.charAt(0).toUpperCase() +
+          eligibilityData.jobPostingEligibility.plan.slice(1),
+        effectiveLimit:
+          eligibilityData.jobPostingEligibility.effectiveLimit === "Unlimited"
+            ? "Unlimited"
+            : Number(eligibilityData.jobPostingEligibility.effectiveLimit),
+        isUnlimited:
+          eligibilityData.jobPostingEligibility.effectiveLimit === "Unlimited",
+        upgradeRequired: !eligibilityData.jobPostingEligibility.canPost,
       }
-    }
-
-    loadJobs()
-  }, [allowed])
+    : null
 
   function getPostedText(createdAt: string) {
     const created = new Date(createdAt)
     const now = new Date()
-
     const diffMs = now.getTime() - created.getTime()
-
     const diffMinutes = Math.floor(diffMs / (1000 * 60))
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
     const diffDays = Math.floor(diffHours / 24)
 
-    if (diffMinutes < 60) {
-      return "Posted just now"
-    }
-
-    if (diffHours < 24) {
-      return `Posted ${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
-    }
-
-    if (diffDays === 1) {
-      return "Posted yesterday"
-    }
-
+    if (diffMinutes < 60) return "Posted just now"
+    if (diffHours < 24) return `Posted ${diffHours} hour${diffHours > 1 ? "s" : ""} ago`
+    if (diffDays === 1) return "Posted yesterday"
     return `Posted ${diffDays} days ago`
   }
 
   if (!allowed) return null
 
-  if (loading) {
+  if (jobsLoading) {
     return <div className="p-10">Loading jobs...</div>
   }
 
   return (
     <div className="min-h-screen bg-[#f6f8fc] px-6 py-10">
       <div className="max-w-[1200px] mx-auto">
-
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-2xl font-bold">My Jobs</h1>
-
           <PostJobButton eligibility={eligibility} />
         </div>
 
-        {eligibility && (
+        {eligibility?.message && (
           <p className="mb-8 text-sm text-gray-600">{eligibility.message}</p>
         )}
 
@@ -145,15 +112,15 @@ export default function MyJobsPage() {
               >
                 <div className="flex justify-between mb-3">
                   <h2 className="text-lg font-semibold">{job.title}</h2>
-                <span
-                  className={`text-xs px-3 py-1 rounded-full ${
-                    job.isActive
-                      ? "bg-green-100 text-green-600"
-                      : "bg-gray-100 text-gray-500"
-                  }`}
-                >
-                  {job.isActive ? "Active" : "Inactive (plan limit)"}
-                </span>
+                  <span
+                    className={`text-xs px-3 py-1 rounded-full ${
+                      job.isActive
+                        ? "bg-green-100 text-green-600"
+                        : "bg-gray-100 text-gray-500"
+                    }`}
+                  >
+                    {job.isActive ? "Active" : "Inactive (plan limit)"}
+                  </span>
                 </div>
 
                 <div className="flex gap-4 text-sm text-gray-500 mb-4">
@@ -161,7 +128,6 @@ export default function MyJobsPage() {
                     <MapPin size={14} />
                     {job.location}
                   </span>
-
                   {job.employmentType && (
                     <span className="bg-gray-100 px-3 py-1 rounded-full">
                       {job.employmentType}
@@ -201,7 +167,7 @@ export default function MyJobsPage() {
                       className="flex items-center gap-1 text-sm text-gray-600"
                     >
                       <Users size={14} />
-                      Applicants ({job._count?.JobApplication ?? 0})
+                      Applicants ({job.applicationCount ?? 0})
                     </Link>
                   </div>
                 </div>
@@ -209,7 +175,6 @@ export default function MyJobsPage() {
             ))}
           </div>
         )}
-
       </div>
     </div>
   )

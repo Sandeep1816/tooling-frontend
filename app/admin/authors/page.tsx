@@ -1,5 +1,9 @@
 "use client";
+
 import { useState } from "react";
+import { useMutation } from "@/lib/apollo/hooks";
+import { CREATE_AUTHOR_MUTATION } from "@/lib/graphql/operations";
+import { getGraphQLErrorMessage } from "@/lib/auth/session";
 
 export default function CreateAuthor() {
   const [form, setForm] = useState({
@@ -9,7 +13,11 @@ export default function CreateAuthor() {
   });
   const [message, setMessage] = useState("");
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const [createAuthor, { loading }] = useMutation(CREATE_AUTHOR_MUTATION);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
@@ -18,21 +26,19 @@ export default function CreateAuthor() {
     setMessage("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/authors`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+      await createAuthor({
+        variables: {
+          input: {
+            name: form.name,
+            bio: form.bio || null,
+            avatarUrl: form.avatarUrl || null,
+          },
+        },
       });
-
-      if (res.ok) {
-        setMessage("✅ Author created successfully!");
-        setForm({ name: "", bio: "", avatarUrl: "" });
-      } else {
-        const error = await res.json();
-        setMessage(`❌ Failed: ${error.message || "Unknown error"}`);
-      }
+      setMessage("✅ Author created successfully!");
+      setForm({ name: "", bio: "", avatarUrl: "" });
     } catch (err) {
-      setMessage("❌ Network error, please try again.");
+      setMessage(`❌ Failed: ${getGraphQLErrorMessage(err)}`);
     }
   };
 
@@ -65,8 +71,12 @@ export default function CreateAuthor() {
           onChange={handleChange}
           className="w-full p-2 border rounded"
         />
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
-          Create Author
+        <button
+          type="submit"
+          disabled={loading}
+          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+        >
+          {loading ? "Creating..." : "Create Author"}
         </button>
       </form>
       {message && <p className="mt-3 text-sm">{message}</p>}

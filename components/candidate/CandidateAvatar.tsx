@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { User } from "lucide-react";
+import { resolveMediaUrl } from "@/lib/media";
 
 const sizeMap = {
   sm: { box: "w-10 h-10", icon: 18, text: "text-sm" },
@@ -35,16 +36,17 @@ export default function CandidateAvatar({
   const initials = getInitials(name);
 
   if (avatarUrl) {
+    const src = resolveMediaUrl(avatarUrl);
     return (
       <div className={`relative ${config.box} flex-shrink-0 ${className}`}>
         <Image
           key={avatarUrl}
-          src={avatarUrl}
+          src={src}
           alt={name || "Profile photo"}
           fill
           className={`rounded-full object-cover bg-white ${borderClassName}`}
           sizes={size === "xl" ? "96px" : size === "lg" ? "80px" : size === "md" ? "64px" : "40px"}
-          unoptimized={avatarUrl.includes("cloudinary")}
+          unoptimized={src.includes("cloudinary")}
         />
       </div>
     );

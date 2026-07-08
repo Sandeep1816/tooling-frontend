@@ -2,9 +2,10 @@
 "use client";
 
 import Image from "next/image";
+import { getBannerClickUrl } from "@/lib/graphql/server";
 
 type Banner = {
-  id: number;
+  id: string;
   title: string;
   imageUrl: string;
   targetUrl?: string;
@@ -26,7 +27,7 @@ export default function TrendingAd({ banner }: Props) {
 
         <div className="rounded-xl overflow-hidden">
           <a
-            href={`${process.env.NEXT_PUBLIC_API_URL}/api/banners/${banner.id}/click`}
+            href={getBannerClickUrl(banner.id)}
             target="_blank"
             rel="noopener noreferrer"
           >

@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import { useEffect, useState } from "react"
 import Image from "next/image"
 import { useParams } from "next/navigation"
@@ -10,6 +11,8 @@ import ContentGateModal from "@/components/content-gate-modal"
 import PostViewCounter from "@/components/PostViewCounter"
 import Loader from "@/components/Loader"
 import SupplierAds from "@/components/SupplierAds"
+import { graphqlRequest } from "@/lib/graphql/server"
+import { POST_BY_SLUG_QUERY } from "@/lib/graphql/queries"
 
 /* ================= TYPES ================= */
 type Author = {
@@ -68,22 +71,15 @@ export default function PostDetailsPage() {
 
   /* ================= FETCH POST ================= */
   useEffect(() => {
-    async function fetchPost() {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`,
-          { cache: "no-store" }
-        )
-        const data = await res.json()
-        const posts: Post[] = Array.isArray(data.data) ? data.data : []
-        const found = posts.find(p => p.slug === slugValue)
-        if (found) setPost(found)
-      } catch (err) {
-        console.error("Failed to load post:", err)
-      }
-    }
+    if (!slugValue) return
 
-    if (slugValue) fetchPost()
+    graphqlRequest<{ post: Post | null }>(POST_BY_SLUG_QUERY, {
+      slug: slugValue,
+    })
+      .then((data) => {
+        if (data.post) setPost(data.post)
+      })
+      .catch((err) => console.error("Failed to load post:", err))
   }, [slugValue])
 
   /* ================= CONTENT GATE ================= */
@@ -103,11 +99,7 @@ export default function PostDetailsPage() {
     post.category?.slug === "industry-talks"
 
   const imageUrl =
-    post.imageUrl?.startsWith("http")
-      ? post.imageUrl
-      : post.imageUrl
-      ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-      : "/placeholder.svg"
+    resolveMediaUrl(post.imageUrl)
 
   const date = post.publishedAt
     ? new Date(post.publishedAt).toLocaleDateString("en-US", {

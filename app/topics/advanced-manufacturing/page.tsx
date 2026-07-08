@@ -1,29 +1,16 @@
 import Link from "next/link"
-import type { Post } from "@/types/Post"
 import TopicListing from "@/components/topics/TopicListing"
+import { fetchPostsList, categorySlugOf } from "@/lib/graphql/posts"
 
 export default async function BuildPage() {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`,
-    { cache: "no-store" }
-  )
+  const posts = await fetchPostsList(50)
 
-  const data = await res.json()
-  const posts: Post[] = data.data || data
-
-  const slugOf = (post: Post) =>
-    typeof post.category === "object"
-      ? post.category?.slug?.toLowerCase()
-      : String(post.category || "").toLowerCase()
-
-  // ================= WHAT'S NEW POSTS =================
   const whatsNewPosts = posts
-    .filter((p) => slugOf(p).includes("whatsnew"))
+    .filter((p) => categorySlugOf(p).includes("whatsnew"))
     .slice(0, 5)
 
-  // ================= BUILD POSTS =================
   const buildPosts = posts.filter(
-    (p) => slugOf(p) === "advancedmanufacturing"
+    (p) => categorySlugOf(p) === "advancedmanufacturing"
   )
 
   return (

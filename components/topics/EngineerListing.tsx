@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Link from "next/link"
 import Image from "next/image"
 import { Post } from "@/types/Post"
@@ -16,11 +17,7 @@ export default function EngineerListing({ posts }: Props) {
   const gridPosts = rest.slice(0, 6)
 
   const getImage = (post: Post) =>
-    post.imageUrl?.startsWith("http")
-      ? post.imageUrl
-      : post.imageUrl
-      ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-      : "/placeholder.svg"
+    resolveMediaUrl(post.imageUrl)
 
   const formatDate = (date?: string) =>
     date

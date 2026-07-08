@@ -2,10 +2,20 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useLazyQuery, useMutation } from "@/lib/apollo/hooks"
 import UploadBox from "@/components/UploadBox"
+import {
+  INDUSTRIES_QUERY,
+  RECRUITER_ME_QUERY,
+  UPDATE_COMPANY_MUTATION,
+  UPDATE_USER_MUTATION,
+} from "@/lib/graphql/operations"
+import { getUploadUrl } from "@/lib/graphql/server"
+import { resolveMediaUrl } from "@/lib/media"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
 
 type Industry = {
-  id: number
+  id: string
   name: string
 }
 
@@ -13,6 +23,8 @@ export default function EditRecruiterProfile() {
   const router = useRouter()
 
   const [industries, setIndustries] = useState<Industry[]>([])
+  const [userId, setUserId] = useState("")
+  const [companyId, setCompanyId] = useState("")
 
   const [form, setForm] = useState({
     fullName: "",
@@ -39,64 +51,57 @@ export default function EditRecruiterProfile() {
   const [success, setSuccess] = useState("")
   const [error, setError] = useState("")
 
-  /* ================= LOAD PROFILE ================= */
+  const [loadProfile] = useLazyQuery(RECRUITER_ME_QUERY, { fetchPolicy: "network-only" })
+  const [loadIndustries] = useLazyQuery(INDUSTRIES_QUERY)
+  const [updateUser] = useMutation(UPDATE_USER_MUTATION)
+  const [updateCompany] = useMutation(UPDATE_COMPANY_MUTATION)
 
-useEffect(() => {
-  async function loadData() {
-    const token = localStorage.getItem("token")
+  useEffect(() => {
+    async function loadData() {
+      const [profileResult, industryResult] = await Promise.all([
+        loadProfile(),
+        loadIndustries(),
+      ])
 
-    console.log("TOKEN:", token)
+      const profile = profileResult.data?.me
+      const industryData = industryResult.data?.industries
 
-    const [profileRes, industryRes] = await Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/recruiters/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      }),
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/industries`),
-    ])
+      setIndustries(industryData || [])
 
-    console.log("PROFILE STATUS:", profileRes.status)
+      if (!profile) return
 
-    const profile = await profileRes.json()
+      setUserId(profile.id)
+      setCompanyId(profile.companyId || profile.company?.id || "")
 
-    console.log("PROFILE DATA:", profile)
+      setForm({
+        fullName: profile.fullName || "",
+        headline: profile.headline || "",
+        about: profile.about || "",
+        location: profile.location || "",
+        websiteUrl: profile.websiteUrl || "",
+        avatarUrl: profile.avatarUrl || "",
 
-    const industryData = await industryRes.json()
+        companyName: profile.company?.name || "",
+        companyTagline: profile.company?.tagline || "",
+        companyDescription: profile.company?.description || "",
+        companyIndustryId: profile.company?.industryId?.toString() || "",
+        companyLocation: profile.company?.location || "",
+        companyAddress: profile.company?.address || "",
+        companySize: profile.company?.companySize || "",
+        companyWebsite: profile.company?.website || "",
+        companyLogoUrl: profile.company?.logoUrl || "",
+        companyCoverImageUrl: profile.company?.coverImageUrl || "",
+      })
+    }
 
-    setIndustries(industryData || [])
-
-    setForm({
-      fullName: profile.fullName || "",
-      headline: profile.headline || "",
-      about: profile.about || "",
-      location: profile.location || "",
-      websiteUrl: profile.websiteUrl || "",
-      avatarUrl: profile.avatarUrl || "",
-
-      companyName: profile.Company?.name || "",
-      companyTagline: profile.Company?.tagline || "",
-      companyDescription: profile.Company?.description || "",
-      companyIndustryId: profile.Company?.industryId?.toString() || "",
-      companyLocation: profile.Company?.location || "",
-      companyAddress: profile.Company?.address || "",
-      companySize: profile.Company?.companySize || "",
-      companyWebsite: profile.Company?.website || "",
-      companyLogoUrl: profile.Company?.logoUrl || "",
-      companyCoverImageUrl: profile.Company?.coverImageUrl || "",
-    })
-  }
-
-  loadData()
-}, [])
-
-  /* ================= HANDLE INPUT ================= */
+    loadData()
+  }, [loadProfile, loadIndustries])
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
-
-  /* ================= HANDLE IMAGE UPLOAD ================= */
 
   async function handleImageUpload(file: File, field: string) {
     try {
@@ -106,19 +111,16 @@ useEffect(() => {
       const formData = new FormData()
       formData.append("image", file)
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData,
-        }
-      )
+      const res = await fetch(getUploadUrl(), {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: formData,
+      })
 
       const data = await res.json()
       if (!res.ok) throw new Error()
 
-      setForm(prev => ({
+      setForm((prev) => ({
         ...prev,
         [field]: data.imageUrl,
       }))
@@ -129,8 +131,6 @@ useEffect(() => {
     }
   }
 
-  /* ================= SUBMIT ================= */
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
@@ -138,24 +138,43 @@ useEffect(() => {
     setSuccess("")
 
     try {
-      const token = localStorage.getItem("token")
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recruiters/profile`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(form),
-        }
-      )
-
-      const data = await res.json()
-      if (!res.ok) {
-        setError(data.error || "Failed to update")
+      if (!userId) {
+        setError("Profile not loaded")
         return
+      }
+
+      await updateUser({
+        variables: {
+          id: userId,
+          input: {
+            fullName: form.fullName || undefined,
+            headline: form.headline || undefined,
+            about: form.about || undefined,
+            location: form.location || undefined,
+            websiteUrl: form.websiteUrl || undefined,
+            avatarUrl: form.avatarUrl || undefined,
+          },
+        },
+      })
+
+      if (companyId) {
+        await updateCompany({
+          variables: {
+            id: companyId,
+            input: {
+              name: form.companyName || undefined,
+              tagline: form.companyTagline || undefined,
+              description: form.companyDescription || undefined,
+              industryId: form.companyIndustryId || undefined,
+              location: form.companyLocation || undefined,
+              address: form.companyAddress || undefined,
+              companySize: form.companySize || undefined,
+              website: form.companyWebsite || undefined,
+              logoUrl: form.companyLogoUrl || undefined,
+              coverImageUrl: form.companyCoverImageUrl || undefined,
+            },
+          },
+        })
       }
 
       setSuccess("Profile & Company updated successfully 🎉")
@@ -163,8 +182,8 @@ useEffect(() => {
       setTimeout(() => {
         router.push("/recruiter/dashboard")
       }, 1200)
-    } catch {
-      setError("Something went wrong")
+    } catch (err) {
+      setError(getGraphQLErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -191,12 +210,11 @@ useEffect(() => {
 
         <form onSubmit={handleSubmit} className="space-y-6">
 
-          {/* ================= RECRUITER SECTION ================= */}
           <SectionTitle title="Company Owner Information" />
 
           <UploadBox
             label={uploading ? "Uploading..." : "Profile Avatar"}
-            value={form.avatarUrl}
+            value={form.avatarUrl ? resolveMediaUrl(form.avatarUrl) : ""}
             onUpload={(file) => handleImageUpload(file, "avatarUrl")}
             height="h-40"
             accept="image/*"
@@ -209,12 +227,11 @@ useEffect(() => {
 
           <Textarea label="About" name="about" value={form.about} onChange={handleChange} />
 
-          {/* ================= COMPANY SECTION ================= */}
           <SectionTitle title="Company Information" />
 
           <UploadBox
             label="Company Logo"
-            value={form.companyLogoUrl}
+            value={form.companyLogoUrl ? resolveMediaUrl(form.companyLogoUrl) : ""}
             onUpload={(file) => handleImageUpload(file, "companyLogoUrl")}
             height="h-32"
             accept="image/*"
@@ -222,7 +239,7 @@ useEffect(() => {
 
           <UploadBox
             label="Company Cover Image"
-            value={form.companyCoverImageUrl}
+            value={form.companyCoverImageUrl ? resolveMediaUrl(form.companyCoverImageUrl) : ""}
             onUpload={(file) => handleImageUpload(file, "companyCoverImageUrl")}
             height="h-40"
             accept="image/*"
@@ -267,8 +284,6 @@ useEffect(() => {
   )
 }
 
-/* ================= COMPONENTS ================= */
-
 function SectionTitle({ title }: { title: string }) {
   return (
     <h2 className="text-lg font-semibold text-gray-900 border-b pb-2">
@@ -286,7 +301,7 @@ function Input({
   label: string
   name: string
   value: string
-  onChange: any
+  onChange: React.ChangeEventHandler<HTMLInputElement>
 }) {
   return (
     <div>
@@ -311,7 +326,7 @@ function Textarea({
   label: string
   name: string
   value: string
-  onChange: any
+  onChange: React.ChangeEventHandler<HTMLTextAreaElement>
 }) {
   return (
     <div>

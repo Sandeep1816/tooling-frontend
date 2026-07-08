@@ -1,28 +1,27 @@
 "use client"
 
+import { useMutation } from "@/lib/apollo/hooks"
+import { TRACK_SUPPLIER_CONNECTION_MUTATION } from "@/lib/graphql/operations"
+
 export default function SocialLinksTracker({
   supplierId,
   children,
 }: {
-  supplierId: number
+  supplierId: string
   children: React.ReactNode
 }) {
+  const [trackConnection] = useMutation(TRACK_SUPPLIER_CONNECTION_MUTATION)
+
   const track = async () => {
     try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/suppliers/${supplierId}/connection`,
-        { method: "POST" }
-      )
+      await trackConnection({ variables: { id: supplierId } })
     } catch (err) {
       console.error("Failed to track connection", err)
     }
   }
 
   return (
-    <div
-      onClick={track}
-      className="inline-flex"
-    >
+    <div onClick={track} className="inline-flex">
       {children}
     </div>
   )

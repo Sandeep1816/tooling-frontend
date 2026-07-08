@@ -2,16 +2,17 @@
 import dynamic from "next/dynamic"
 import { useState, useEffect } from "react"
 import { useRouter, useParams } from "next/navigation"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import "react-quill-new/dist/quill.snow.css"
+import { JOB_BY_ID_QUERY, UPDATE_JOB_MUTATION } from "@/lib/graphql/operations"
 
 const ReactQuill = dynamic(() => import("react-quill-new"), {
   ssr: false,
 })
 
-
-export default function CreateJobPage() {
+export default function EditJobPage() {
   const router = useRouter()
-  const { jobId } = useParams()
+  const { jobId } = useParams<{ jobId: string }>()
 
   const [form, setForm] = useState({
     title: "",
@@ -24,69 +25,54 @@ export default function CreateJobPage() {
     isRemote: false,
   })
 
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+
+  const { data, loading: loadingJob } = useQuery(JOB_BY_ID_QUERY, {
+    variables: { id: jobId },
+    skip: !jobId,
+  })
+
+  const [updateJob, { loading }] = useMutation(UPDATE_JOB_MUTATION)
+
+  useEffect(() => {
+    const job = data?.jobById
+    if (!job) return
+
+    setForm({
+      title: job.title,
+      slug: job.slug,
+      description: job.description,
+      employmentType: job.employmentType,
+      experience: job.experience ?? "",
+      salaryRange: job.salaryRange ?? "",
+      location: job.location,
+      isRemote: job.isRemote,
+    })
+  }, [data])
 
   function handleChange(
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) {
     const { name, value, type } = e.target
-
     setForm({
       ...form,
       [name]:
-        type === "checkbox"
-          ? (e.target as HTMLInputElement).checked
-          : value,
+        type === "checkbox" ? (e.target as HTMLInputElement).checked : value,
     })
   }
 
-  function handleTitleChange(
-  e: React.ChangeEvent<HTMLInputElement>
-) {
-  const title = e.target.value
-
-  setForm(prev => ({
-    ...prev,
-    title,
-    slug: generateSlug(title),
-  }))
-}
-
-useEffect(() => {
-  async function loadJob() {
-    const token = localStorage.getItem("token")
-
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/recruiter/me/${jobId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    )
-
-    const data = await res.json()
-
-    setForm({
-      title: data.title,
-      slug: data.slug,
-      description: data.description,
-      employmentType: data.employmentType,
-      experience: data.experience,
-      salaryRange: data.salaryRange,
-      location: data.location,
-      isRemote: data.isRemote,
-    })
+  function handleTitleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const title = e.target.value
+    setForm((prev) => ({
+      ...prev,
+      title,
+      slug: generateSlug(title),
+    }))
   }
-
-  loadJob()
-}, [jobId])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
-    setLoading(true)
 
     try {
       const token = localStorage.getItem("token")
@@ -95,76 +81,67 @@ useEffect(() => {
         return
       }
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/${jobId}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
+      await updateJob({
+        variables: {
+          id: jobId,
+          input: {
+            title: form.title,
+            slug: form.slug,
+            description: form.description,
+            employmentType: form.employmentType,
+            experience: form.experience || undefined,
+            salaryRange: form.salaryRange || undefined,
+            location: form.location,
+            isRemote: form.isRemote,
           },
-          body: JSON.stringify(form),
-        }
-      )
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || "Failed to create job")
-        return
-      }
+        },
+      })
 
       router.push("/recruiter/jobs")
     } catch (err) {
-      setError("Something went wrong")
-    } finally {
-      setLoading(false)
+      setError(err instanceof Error ? err.message : "Failed to update job")
     }
   }
 
   function generateSlug(text: string) {
-  return text
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-")
-}
+    return text
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9\s-]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+  }
 
-
+  if (loadingJob) {
+    return <div className="p-10">Loading job...</div>
+  }
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-16">
       <h1 className="text-2xl font-bold mb-6">Edit Job</h1>
 
       {error && (
-        <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded">
-          {error}
-        </div>
+        <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded">{error}</div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        <input
+          name="title"
+          required
+          placeholder="Job Title"
+          className="w-full border p-3 rounded"
+          value={form.title}
+          onChange={handleTitleChange}
+        />
 
-     {/* Title */}
-<input
-  name="title"
-  required
-  placeholder="Job Title"
-  className="w-full border p-3 rounded"
-  value={form.title}
-  onChange={handleTitleChange}
-/>
+        <input
+          name="slug"
+          required
+          readOnly
+          className="w-full border p-3 rounded bg-gray-100"
+          value={form.slug}
+        />
 
-      {/* Slug */}
-<input
-  name="slug"
-  required
-  readOnly
-  className="w-full border p-3 rounded bg-gray-100"
-  value={form.slug}
-/>
-
-        {/* Employment Type */}
         <select
           name="employmentType"
           className="w-full border p-3 rounded"
@@ -177,7 +154,6 @@ useEffect(() => {
           <option value="Internship">Internship</option>
         </select>
 
-        {/* Experience */}
         <input
           name="experience"
           placeholder="Experience (e.g. 2-5 years)"
@@ -186,7 +162,6 @@ useEffect(() => {
           onChange={handleChange}
         />
 
-        {/* Salary */}
         <input
           name="salaryRange"
           placeholder="Salary Range (e.g. ₹6L - ₹12L)"
@@ -195,7 +170,6 @@ useEffect(() => {
           onChange={handleChange}
         />
 
-        {/* Location */}
         <input
           name="location"
           required
@@ -205,7 +179,6 @@ useEffect(() => {
           onChange={handleChange}
         />
 
-        {/* Remote Option */}
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -216,21 +189,15 @@ useEffect(() => {
           Remote Job
         </label>
 
-        {/* Description */}
-       <div>
-  <label className="block font-semibold mb-2">
-    Job Description
-  </label>
-
-  <ReactQuill
-    theme="snow"
-    value={form.description}
-    onChange={(value) =>
-      setForm(prev => ({ ...prev, description: value }))
-    }
-    className="bg-white"
-  />
-</div>
+        <div>
+          <label className="block font-semibold mb-2">Job Description</label>
+          <ReactQuill
+            theme="snow"
+            value={form.description}
+            onChange={(value) => setForm((prev) => ({ ...prev, description: value }))}
+            className="bg-white"
+          />
+        </div>
 
         <button
           disabled={loading}

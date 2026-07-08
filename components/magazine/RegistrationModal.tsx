@@ -1,36 +1,52 @@
 "use client"
 
 import { useState } from "react"
+import { useMutation } from "@/lib/apollo/hooks"
+import { REGISTER_FOR_MAGAZINE_MUTATION } from "@/lib/graphql/operations"
 
-export default function RegistrationModal({ magazineId, onClose }: any) {
+export default function RegistrationModal({
+  magazineId,
+  onClose,
+}: {
+  magazineId: string
+  onClose: () => void
+}) {
   const [loading, setLoading] = useState(false)
+  const [registerForMagazine] = useMutation(REGISTER_FOR_MAGAZINE_MUTATION)
 
-  async function handleSubmit(e: any) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setLoading(true)
 
-    const formData = Object.fromEntries(new FormData(e.target))
+    const formData = Object.fromEntries(new FormData(e.currentTarget))
 
-    await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/magazines/${magazineId}/register`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
-      }
-    )
-
-    alert("Check your email for the magazine.")
-    setLoading(false)
-    onClose()
+    try {
+      await registerForMagazine({
+        variables: {
+          input: {
+            magazineId,
+            firstName: String(formData.firstName),
+            lastName: String(formData.lastName),
+            email: String(formData.email),
+            companyName: formData.companyName ? String(formData.companyName) : undefined,
+            jobTitle: formData.jobTitle ? String(formData.jobTitle) : undefined,
+            country: formData.country ? String(formData.country) : undefined,
+          },
+        },
+      })
+      alert("Check your email for the magazine.")
+      onClose()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Registration failed")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white p-6 rounded-xl w-full max-w-md">
-        <h2 className="text-xl font-semibold mb-4">
-          Access Digital Edition
-        </h2>
+        <h2 className="text-xl font-semibold mb-4">Access Digital Edition</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <input name="firstName" required placeholder="First Name" className="input w-full" />
@@ -48,10 +64,7 @@ export default function RegistrationModal({ magazineId, onClose }: any) {
           </button>
         </form>
 
-        <button
-          onClick={onClose}
-          className="text-sm text-gray-500 mt-4"
-        >
+        <button onClick={onClose} className="text-sm text-gray-500 mt-4">
           Cancel
         </button>
       </div>

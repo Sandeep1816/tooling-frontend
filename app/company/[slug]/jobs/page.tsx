@@ -1,118 +1,15 @@
 "use client"
 
-import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
-import { MapPin, Briefcase, CheckCircle } from "lucide-react"
+import { MapPin, Briefcase } from "lucide-react"
 import CompanyTabs from "@/components/company/CompanyTabs"
 import CompanyHeader from "@/components/company/CompanyHeader"
-
-type Job = {
-  id: number
-  title: string
-  slug: string
-  location: string
-  employmentType: string
-  isRemote?: boolean
-  createdAt: string
-}
-
-type Company = {
-  id: number
-  name: string
-  slug: string
-  tagline?: string
-  logoUrl?: string
-  isVerified: boolean // Changed from optional to required
-  followers: number // Added followers field
-  jobs: Job[]
-}
+import { useCompanyProfile } from "@/lib/company/useCompanyProfile"
 
 export default function CompanyJobsPage() {
   const { slug } = useParams<{ slug: string }>()
-  const [company, setCompany] = useState<Company | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [following, setFollowing] = useState(false)
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${slug}`
-        )
-        if (res.ok) {
-          const data = await res.json()
-          setCompany(data)
-
-          // Check if user is following this company
-          const token = localStorage.getItem("token")
-          if (token && data.id) {
-            const followStatusRes = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${data.id}/follow-status`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-            if (followStatusRes.ok) {
-              const statusData = await followStatusRes.json();
-              setFollowing(statusData.isFollowing);
-            }
-          }
-        }
-      } catch (err) {
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (slug) load()
-  }, [slug])
-
-  async function toggleFollow() {
-    if (!company) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("Login required");
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/follow`,
-        {
-          method: following ? "DELETE" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        setFollowing(!following);
-        setCompany((prev) =>
-          prev
-            ? {
-                ...prev,
-                followers: following ? prev.followers - 1 : prev.followers + 1,
-              }
-            : prev
-        );
-      } else if (response.status === 409) {
-        setFollowing(true);
-      } else {
-        const errorData = await response.json();
-        alert(errorData.error || "Action failed");
-      }
-    } catch (error) {
-      console.error("Follow toggle error:", error);
-      alert("An error occurred");
-    }
-  }
+  const { company, loading, following, toggleFollow } = useCompanyProfile(slug)
 
   if (loading) return <div className="p-10">Loading…</div>
   if (!company) return <div className="p-10 text-center">Company not found</div>
@@ -137,7 +34,14 @@ export default function CompanyJobsPage() {
             <p className="text-sm text-gray-500">No active jobs at the moment.</p>
           ) : (
             <div className="space-y-4">
-              {jobs.map((job) => (
+              {jobs.map((job: {
+                id: string
+                title: string
+                slug: string
+                location: string
+                employmentType: string
+                isRemote?: boolean
+              }) => (
                 <Link
                   key={job.id}
                   href={`/jobs/${job.slug}`}

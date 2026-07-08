@@ -2,11 +2,18 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import UploadBox from "@/components/UploadBox"
+import { getUploadUrl } from "@/lib/graphql/server"
+import {
+  POST_BY_ID_QUERY,
+  UPDATE_RECRUITER_ARTICLE_MUTATION,
+} from "@/lib/graphql/operations"
 
 export default function EditRecruiterArticlePage() {
   const { id } = useParams()
   const router = useRouter()
+  const articleId = String(id)
 
   const [title, setTitle] = useState("")
   const [excerpt, setExcerpt] = useState("")
@@ -14,51 +21,26 @@ export default function EditRecruiterArticlePage() {
   const [imageUrl, setImageUrl] = useState("")
   const [badge, setBadge] = useState("")
   const [uploading, setUploading] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [initialized, setInitialized] = useState(false)
 
-  /* ================= FETCH ARTICLE ================= */
+  const { data, loading } = useQuery(POST_BY_ID_QUERY, {
+    variables: { id: articleId },
+    skip: !articleId,
+  })
 
   useEffect(() => {
-    fetchArticle()
-  }, [])
+    if (initialized || !data?.postById) return
+    const article = data.postById
+    setTitle(article.title || "")
+    setExcerpt(article.excerpt || "")
+    setContent(article.content || "")
+    setImageUrl(article.imageUrl || "")
+    setBadge(article.badge || "")
+    setInitialized(true)
+  }, [data, initialized])
 
-  async function fetchArticle() {
-    try {
-      const token = localStorage.getItem("token")
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recruiter/articles`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
-
-      if (!res.ok) throw new Error("Failed to fetch articles")
-
-      const data = await res.json()
-      const articles = Array.isArray(data) ? data : data?.data || []
-
-      const article = articles.find((a: any) => a.id === Number(id))
-
-      if (!article) throw new Error("Article not found")
-
-      setTitle(article.title || "")
-      setExcerpt(article.excerpt || "")
-      setContent(article.content || "")
-      setImageUrl(article.imageUrl || "")
-      setBadge(article.badge || "") // ✅ set badge
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  /* ================= IMAGE UPLOAD ================= */
+  const [updateArticle, { loading: saving }] = useMutation(UPDATE_RECRUITER_ARTICLE_MUTATION)
 
   const handleImageUpload = async (file: File) => {
     setUploading(true)
@@ -68,63 +50,46 @@ export default function EditRecruiterArticlePage() {
       const formData = new FormData()
       formData.append("image", file)
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      )
+      const res = await fetch(getUploadUrl(), {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+        },
+        body: formData,
+      })
 
       if (!res.ok) throw new Error("Image upload failed")
 
       const data = await res.json()
       setImageUrl(data.imageUrl)
-    } catch (err: any) {
-      setError(err.message)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Upload failed")
     } finally {
       setUploading(false)
     }
   }
 
-  /* ================= UPDATE ARTICLE ================= */
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setSaving(true)
     setError("")
 
     try {
-      const token = localStorage.getItem("token")
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recruiter/articles/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
+      await updateArticle({
+        variables: {
+          id: articleId,
+          input: {
             title,
-            excerpt,
+            excerpt: excerpt || null,
             content,
-            imageUrl,
-            badge: badge.trim() || null, // ✅ send badge
-          }),
-        }
-      )
-
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.error || "Update failed")
-      }
+            imageUrl: imageUrl || null,
+            badge: badge.trim() || null,
+          },
+        },
+      })
 
       router.push("/recruiter/articles")
-    } catch (err: any) {
-      setError(err.message)
-    } finally {
-      setSaving(false)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Update failed")
     }
   }
 
@@ -161,7 +126,6 @@ export default function EditRecruiterArticlePage() {
           required
         />
 
-        {/* 🔥 BADGE INPUT */}
         <input
           type="text"
           placeholder="Badge (optional) e.g. FEATURED, TRENDING"
@@ -170,7 +134,6 @@ export default function EditRecruiterArticlePage() {
           onChange={(e) => setBadge(e.target.value.toUpperCase())}
         />
 
-        {/* IMAGE UPLOAD */}
         <UploadBox
           label="Article Image"
           value={imageUrl}

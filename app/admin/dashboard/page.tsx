@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useQuery } from "@/lib/apollo/hooks";
 import Link from "next/link";
 import {
   Bar,
@@ -23,6 +23,7 @@ import {
   IndianRupee,
   TrendingUp,
 } from "lucide-react";
+import { ADMIN_ANALYTICS_QUERY } from "@/lib/graphql/operations";
 import {
   ChartContainer,
   ChartTooltip,
@@ -60,13 +61,13 @@ type Analytics = {
     applications: number;
   }[];
   recentPurchases: {
-    id: number;
+    id: string;
     packageName: string;
     amount: number;
     status: string;
     createdAt: string;
-    User?: { email: string; fullName?: string };
-    Company?: { name: string };
+    user?: { email: string; fullName?: string };
+    company?: { name: string };
   }[];
 };
 
@@ -124,31 +125,9 @@ function pieTotal(data: Slice[]) {
 }
 
 export default function DashboardPage() {
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/admin/analytics`,
-          { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" }
-        );
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to load analytics");
-        }
-        setAnalytics(await res.json());
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to load analytics");
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, []);
+  const { data, loading, error: queryError } = useQuery(ADMIN_ANALYTICS_QUERY);
+  const analytics = data?.adminAnalytics ?? null;
+  const error = queryError?.message ?? "";
 
   if (loading) {
     return (
@@ -254,7 +233,7 @@ export default function DashboardPage() {
                 outerRadius={95}
                 paddingAngle={3}
               >
-                {analytics.subscriptionPlans.map((entry, index) => (
+                {analytics.subscriptionPlans.map((entry: Slice, index: number) => (
                   <Cell
                     key={entry.key}
                     fill={
@@ -281,7 +260,7 @@ export default function DashboardPage() {
                 outerRadius={95}
                 paddingAngle={3}
               >
-                {analytics.usersByRole.map((entry, index) => (
+                {analytics.usersByRole.map((entry: Slice, index: number) => (
                   <Cell
                     key={entry.key}
                     fill={
@@ -345,7 +324,7 @@ export default function DashboardPage() {
                 outerRadius={90}
                 paddingAngle={4}
               >
-                {analytics.directoryStatus.map((entry, index) => (
+                {analytics.directoryStatus.map((entry: Slice, index: number) => (
                   <Cell
                     key={entry.key}
                     fill={
@@ -372,7 +351,7 @@ export default function DashboardPage() {
                 outerRadius={90}
                 paddingAngle={4}
               >
-                {analytics.paymentStatus.map((entry, index) => (
+                {analytics.paymentStatus.map((entry: Slice, index: number) => (
                   <Cell
                     key={entry.key}
                     fill={
@@ -414,16 +393,16 @@ export default function DashboardPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {analytics.recentPurchases.map((purchase) => (
+              {analytics.recentPurchases.map((purchase: Analytics["recentPurchases"][number]) => (
                 <tr key={purchase.id} className="hover:bg-slate-50/80">
                   <td className="px-6 py-4 font-medium text-slate-900">
                     {purchase.packageName}
                   </td>
                   <td className="px-6 py-4 text-slate-600">
-                    {purchase.User?.fullName || purchase.User?.email || "—"}
+                    {purchase.user?.fullName || purchase.user?.email || "—"}
                   </td>
                   <td className="px-6 py-4 text-slate-600">
-                    {purchase.Company?.name || "—"}
+                    {purchase.company?.name || "—"}
                   </td>
                   <td className="px-6 py-4 text-slate-900">
                     {formatCurrency(purchase.amount)}

@@ -2,7 +2,15 @@
 
 import dynamic from "next/dynamic";
 import { useEffect, useState, FormEvent, ChangeEvent } from "react";
+import { useMutation, useQuery } from "@/lib/apollo/hooks";
 import UploadBox from "@/components/UploadBox";
+import {
+  AUTHORS_QUERY,
+  CATEGORIES_QUERY,
+  CREATE_POST_MUTATION,
+} from "@/lib/graphql/operations";
+import { getGraphQLErrorMessage } from "@/lib/auth/session";
+import { getUploadUrl } from "@/lib/graphql/server";
 import "react-quill-new/dist/quill.snow.css";
 
 const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false });
@@ -25,28 +33,23 @@ export default function CreateIssuePost() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  /* ================= FETCH DATA ================= */
+  const { data: authorsData } = useQuery(AUTHORS_QUERY);
+  const { data: categoriesData } = useQuery(CATEGORIES_QUERY);
+  const [createPost] = useMutation(CREATE_POST_MUTATION);
+
   useEffect(() => {
-    Promise.all([
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/authors`).then(r => r.json()),
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/categories`).then(r => r.json()),
-    ])
-      .then(([a, c]) => {
-        setAuthors(a.data || a);
+    if (authorsData?.authors) setAuthors(authorsData.authors);
+  }, [authorsData]);
 
-        const allowedCategories = [ "inthisissue", "whatsnew"];
+  useEffect(() => {
+    if (!categoriesData?.categories) return;
 
-        const filtered = (c.data || c).filter((cat: any) =>
-          allowedCategories.includes(cat.slug?.toLowerCase())
-        );
-
-        setCategories(filtered);
-      })
-      .catch(() => {
-        setAuthors([]);
-        setCategories([]);
-      });
-  }, []);
+    const allowedCategories = ["inthisissue", "whatsnew"];
+    const filtered = categoriesData.categories.filter((cat: { slug?: string }) =>
+      allowedCategories.includes(cat.slug?.toLowerCase() ?? "")
+    );
+    setCategories(filtered);
+  }, [categoriesData]);
 
   /* ================= AUTO SLUG ================= */
   function handleTitleChange(e: ChangeEvent<HTMLInputElement>) {
@@ -75,13 +78,10 @@ export default function CreateIssuePost() {
       const formData = new FormData();
       formData.append("image", file);
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
+      const res = await fetch(getUploadUrl(), {
+        method: "POST",
+        body: formData,
+      });
 
       const data = await res.json();
       if (res.ok && data.imageUrl) {
@@ -104,37 +104,37 @@ export default function CreateIssuePost() {
       form.content.replace(/<[^>]+>/g, "").substring(0, 150) + "...";
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/posts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      await createPost({
+        variables: {
+          input: {
+            title: form.title,
+            slug: form.slug,
+            badge: form.badge || null,
+            imageUrl: form.imageUrl || null,
+            excerpt,
+            content: form.content,
+            authorId: form.authorId,
+            categoryId: form.categoryId,
+          },
         },
-        body: JSON.stringify({
-          ...form,
-          excerpt,
-          authorId: Number(form.authorId),
-          categoryId: Number(form.categoryId),
-        }),
+        context: {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
       });
 
-      if (res.ok) {
-        setMessage("✅ Issue created successfully!");
-        setForm({
-          title: "",
-          slug: "",
-          badge: "",
-          imageUrl: "",
-          excerpt: "",
-          content: "",
-          authorId: "",
-          categoryId: "",
-        });
-      } else {
-        setMessage("❌ Failed to create issue");
-      }
-    } catch {
-      setMessage("❌ Network error");
+      setMessage("✅ Issue created successfully!");
+      setForm({
+        title: "",
+        slug: "",
+        badge: "",
+        imageUrl: "",
+        excerpt: "",
+        content: "",
+        authorId: "",
+        categoryId: "",
+      });
+    } catch (err) {
+      setMessage(`❌ ${getGraphQLErrorMessage(err)}`);
     } finally {
       setLoading(false);
     }

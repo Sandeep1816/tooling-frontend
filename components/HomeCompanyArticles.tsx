@@ -1,9 +1,11 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 import Link from "next/link"
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { Post } from "../types/Post"
+import { fetchPostsList } from "@/lib/graphql/posts"
 import SupplierAds from "./SupplierAds"
 
 const ROTATE_INTERVAL = 6000
@@ -37,9 +39,11 @@ export default function HomeCompanyArticles() {
   useEffect(() => {
     ;(async () => {
       try {
-        const res  = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/articles/approved`)
-        const data = await res.json()
-        setAllPosts(Array.isArray(data) ? data : [])
+        const data = await fetchPostsList(50, {
+          categorySlug: "articles",
+          status: "APPROVED",
+        })
+        setAllPosts(data)
       } catch (err) {
         console.error("Failed to load approved articles", err)
       }
@@ -120,7 +124,7 @@ export default function HomeCompanyArticles() {
 
                 const imageUrl = post.imageUrl?.startsWith("http")
                   ? post.imageUrl
-                  : `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
+                  : `resolveMediaUrl(post.imageUrl)`
 
                 const formattedDate = post.createdAt
                   ? new Date(post.createdAt).toLocaleDateString("en-US", {

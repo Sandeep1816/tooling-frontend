@@ -1,6 +1,8 @@
 import CandidateAvatar from "@/components/candidate/CandidateAvatar"
 import { MapPin, CheckCircle, Pencil } from "lucide-react"
 import Link from "next/link"
+import { graphqlRequest } from "@/lib/graphql/server"
+import { USER_BY_USERNAME_QUERY } from "@/lib/graphql/queries"
 
 type Candidate = {
   username: string
@@ -9,8 +11,7 @@ type Candidate = {
   about?: string
   location?: string
   avatarUrl?: string
-  company?: string
-  education?: string
+  company?: { name?: string } | string
 }
 
 export default async function CandidateProfilePage(props: {
@@ -18,16 +19,25 @@ export default async function CandidateProfilePage(props: {
 }) {
   const { username } = await props.params
 
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/candidates/${username}`,
-    { cache: "no-store" }
-  )
+  let candidate: Candidate | null = null
 
-  if (!res.ok) {
+  try {
+    const data = await graphqlRequest<{
+      userByUsername: Candidate | null
+    }>(USER_BY_USERNAME_QUERY, { username })
+    candidate = data.userByUsername
+  } catch {
+    candidate = null
+  }
+
+  if (!candidate) {
     return <div className="p-10 text-center">Profile not found</div>
   }
 
-  const candidate: Candidate = await res.json()
+  const companyName =
+    typeof candidate.company === "object"
+      ? candidate.company?.name
+      : candidate.company
 
   return (
     <div className="bg-[#f3f2ef] min-h-screen">
@@ -74,9 +84,9 @@ export default async function CandidateProfilePage(props: {
                     {candidate.headline || "Add your headline"}
                   </p>
 
-                  {candidate.company && (
+                  {companyName && (
                     <p className="text-sm text-gray-600 -mt-0.5">
-                      {candidate.company}
+                      {companyName}
                     </p>
                   )}
 
@@ -109,17 +119,10 @@ export default async function CandidateProfilePage(props: {
 
                 {/* RIGHT INFO (Company / Education logos) */}
                 <div className="hidden md:block space-y-3 text-sm text-gray-700">
-                  {candidate.company && (
+                  {companyName && (
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 bg-gray-200 rounded" />
-                      <span>{candidate.company}</span>
-                    </div>
-                  )}
-
-                  {candidate.education && (
-                    <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 bg-gray-200 rounded" />
-                      <span>{candidate.education}</span>
+                      <span>{companyName}</span>
                     </div>
                   )}
                 </div>
@@ -137,14 +140,7 @@ export default async function CandidateProfilePage(props: {
           {/* ================= EXPERIENCE ================= */}
           <ProfileSection title="Experience">
             <p className="text-sm text-gray-700">
-              {candidate.company || "Add your work experience"}
-            </p>
-          </ProfileSection>
-
-          {/* ================= EDUCATION ================= */}
-          <ProfileSection title="Education">
-            <p className="text-sm text-gray-700">
-              {candidate.education || "Add your education"}
+              {companyName || "Add your work experience"}
             </p>
           </ProfileSection>
 

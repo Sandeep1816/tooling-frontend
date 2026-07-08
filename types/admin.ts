@@ -1,5 +1,5 @@
 export type Company = {
-  id: number
+  id: string
   name: string
   slug: string
   isVerified: boolean
@@ -7,7 +7,7 @@ export type Company = {
 }
 
 export type Recruiter = {
-  id: number
+  id: string
   username: string
   email: string
   createdAt: string
@@ -17,7 +17,7 @@ export type Recruiter = {
 }
 
 export type Directory = {
-  id: number
+  id: string
   name: string
   slug: string
   status: "PENDING" | "APPROVED" | "REJECTED"

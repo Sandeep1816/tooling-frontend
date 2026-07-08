@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 import Link from "next/link"
 import { Post } from "@/types/Post"
@@ -21,11 +22,7 @@ export default function EventsListing({ posts }: { posts: Post[] }) {
         <div className="space-y-10">
           {posts.map((post) => {
             const imageUrl =
-              post.imageUrl?.startsWith("http")
-                ? post.imageUrl
-                : post.imageUrl
-                ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-                : "/placeholder.svg"
+              resolveMediaUrl(post.imageUrl)
 
             const date = post.publishedAt
               ? new Date(post.publishedAt).toLocaleDateString("en-US", {

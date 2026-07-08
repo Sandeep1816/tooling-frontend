@@ -1,4 +1,6 @@
 "use client"
+
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 import Link from "next/link"
 import { Post } from "@/types/Post"
@@ -6,7 +8,7 @@ import { Post } from "@/types/Post"
 export default function ArticlesLatestIssue({ post }: { post: Post }) {
   const imageUrl = post.imageUrl?.startsWith("http")
     ? post.imageUrl
-    : `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
+    : `resolveMediaUrl(post.imageUrl)`
 
   return (
     <section className="grid grid-cols-1 lg:grid-cols-2 min-h-[420px]">

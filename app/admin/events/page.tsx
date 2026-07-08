@@ -1,105 +1,49 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import { Calendar, Eye, Users } from "lucide-react"
-
-/* ================= TYPES ================= */
+import {
+  ADMIN_EVENTS_QUERY,
+  PUBLISH_EVENT_MUTATION,
+} from "@/lib/graphql/operations"
+import { useState } from "react"
 
 type Event = {
-  id: number
+  id: string
   title: string
   slug: string
-  status: "DRAFT" | "PUBLISHED"
+  status: "DRAFT" | "PUBLISHED" | "ARCHIVED"
   startDate: string
   endDate: string
   location?: string
   createdAt: string
   views: number
-  _count: {
-   EventRegistration: number
-  }
+  registrationCount: number
 }
 
-/* ================= PAGE ================= */
-
 export default function AdminEventsPage() {
-  const [events, setEvents] = useState<Event[]>([])
-  const [loading, setLoading] = useState(true)
-  const [publishingId, setPublishingId] = useState<number | null>(null)
+  const { data, loading, refetch } = useQuery(ADMIN_EVENTS_QUERY)
+  const [publishEvent] = useMutation(PUBLISH_EVENT_MUTATION)
+  const [publishingId, setPublishingId] = useState<string | null>(null)
 
-  /* ================= STATS ================= */
-
+  const events: Event[] = data?.adminEvents ?? []
   const totalEvents = events.length
   const totalViews = events.reduce((sum, e) => sum + (e.views ?? 0), 0)
   const totalRegistrations = events.reduce(
-  (sum, e) => sum + (e._count?.EventRegistration ?? 0),
-  0
-)
+    (sum, e) => sum + (e.registrationCount ?? 0),
+    0
+  )
 
-
-  /* ================= FETCH ================= */
-
-  const fetchEvents = async () => {
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/events/admin/all`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      )
-      const data = await res.json()
-      
-
-console.log("EVENTS RESPONSE:", data)
-
-setEvents(
-  Array.isArray(data)
-    ? data
-    : Array.isArray(data.data)
-    ? data.data
-    : Array.isArray(data.events)
-    ? data.events
-    : []
-)
-    } catch (err) {
-      console.error("Failed to fetch events", err)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchEvents()
-  }, [])
-
-  /* ================= ACTIONS ================= */
-
-  const publishEvent = async (id: number) => {
+  const handlePublish = async (id: string) => {
     if (!confirm("Publish this event?")) return
 
     setPublishingId(id)
-
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/events/publish/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      )
-
-      if (res.ok) {
-        await fetchEvents()
-      } else {
-        alert("Failed to publish event")
-      }
+      await publishEvent({ variables: { id } })
+      await refetch()
     } catch {
-      alert("Error publishing event")
+      alert("Failed to publish event")
     } finally {
       setPublishingId(null)
     }
@@ -113,20 +57,12 @@ setEvents(
     )
   }
 
-  /* ================= UI ================= */
-
   return (
     <div className="min-h-screen bg-[#F4F6FA] p-8 space-y-8">
-
-      {/* HEADER */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-[#0A2B57]">
-            Events Management
-          </h1>
-          <p className="text-sm text-gray-500">
-            Create, review and publish events
-          </p>
+          <h1 className="text-2xl font-bold text-[#0A2B57]">Events Management</h1>
+          <p className="text-sm text-gray-500">Create, review and publish events</p>
         </div>
 
         <Link
@@ -137,31 +73,13 @@ setEvents(
         </Link>
       </div>
 
-      {/* STATS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-        <StatCard
-          label="Total Events"
-          value={totalEvents}
-          icon={<Calendar />}
-          color="bg-blue-600"
-        />
-        <StatCard
-          label="Total Views"
-          value={totalViews}
-          icon={<Eye />}
-          color="bg-green-600"
-        />
-        <StatCard
-          label="Registrations"
-          value={totalRegistrations}
-          icon={<Users />}
-          color="bg-purple-600"
-        />
+        <StatCard label="Total Events" value={totalEvents} icon={<Calendar />} color="bg-blue-600" />
+        <StatCard label="Total Views" value={totalViews} icon={<Eye />} color="bg-green-600" />
+        <StatCard label="Registrations" value={totalRegistrations} icon={<Users />} color="bg-purple-600" />
       </div>
 
-      {/* LIST */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-
         {events.length === 0 ? (
           <p className="p-6 text-gray-500">No events found.</p>
         ) : (
@@ -173,25 +91,22 @@ setEvents(
                 <th className="px-6 py-4 text-center">Location</th>
                 <th className="px-6 py-4 text-center">Views</th>
                 <th className="px-6 py-4 text-center">Registrations</th>
-
                 <th className="px-6 py-4 text-center">Status</th>
                 <th className="px-6 py-4 text-right">Actions</th>
-                
               </tr>
             </thead>
 
             <tbody className="divide-y">
-              {events.map(event => (
+              {events.map((event) => (
                 <tr key={event.id} className="hover:bg-gray-50 transition">
-                 <td className="px-6 py-4 font-medium text-[#0A2B57]">
-  <Link
-    href={`/admin/events/${event.id}/registrations`}
-    className="hover:underline text-blue-600"
-  >
-    {event.title}
-  </Link>
-</td>
-
+                  <td className="px-6 py-4 font-medium text-[#0A2B57]">
+                    <Link
+                      href={`/admin/events/${event.id}/registrations`}
+                      className="hover:underline text-blue-600"
+                    >
+                      {event.title}
+                    </Link>
+                  </td>
 
                   <td className="px-6 py-4 text-center text-gray-600">
                     {new Date(event.startDate).toLocaleDateString()} –{" "}
@@ -202,13 +117,11 @@ setEvents(
                     {event.location || "—"}
                   </td>
 
-                  <td className="px-6 py-4 text-center font-semibold">
-                    {event.views}
-                  </td>
+                  <td className="px-6 py-4 text-center font-semibold">{event.views}</td>
 
                   <td className="px-6 py-4 text-center font-semibold">
-  {event._count?.EventRegistration ?? 0}
-</td>
+                    {event.registrationCount ?? 0}
+                  </td>
 
                   <td className="px-6 py-4 text-center">
                     <span
@@ -225,13 +138,11 @@ setEvents(
                   <td className="px-6 py-4 text-right space-x-2">
                     {event.status === "DRAFT" && (
                       <button
-                        onClick={() => publishEvent(event.id)}
+                        onClick={() => handlePublish(event.id)}
                         disabled={publishingId === event.id}
                         className="bg-green-600 text-white px-3 py-1.5 rounded-md text-xs font-medium hover:bg-green-700 disabled:opacity-50"
                       >
-                        {publishingId === event.id
-                          ? "Publishing..."
-                          : "Publish"}
+                        {publishingId === event.id ? "Publishing..." : "Publish"}
                       </button>
                     )}
 
@@ -251,8 +162,6 @@ setEvents(
     </div>
   )
 }
-
-/* ================= STAT CARD ================= */
 
 function StatCard({
   label,

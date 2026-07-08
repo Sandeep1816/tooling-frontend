@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useQuery } from "@/lib/apollo/hooks"
 import {
   ChevronDown,
   Briefcase,
@@ -12,73 +13,36 @@ import {
   FileText,
 } from "lucide-react"
 import AdminPagination, { ADMIN_PAGE_SIZE } from "@/components/admin/AdminPagination"
+import { ADMIN_COMPANY_JOBS_QUERY } from "@/lib/graphql/operations"
 
 const PAGE_SIZE = ADMIN_PAGE_SIZE
 
-/* ================= TYPES ================= */
-
 type Job = {
-  id: number
+  id: string
   title: string
   location: string
   employmentType: string
   createdAt: string
   views: number
-  appliedCount: number // ✅ NEW
+  appliedCount: number
 }
 
 type CompanyJobs = {
-  id: number
+  id: string
   name: string
   slug: string
   jobsCount: number
   jobs: Job[]
 }
 
-/* ================= PAGE ================= */
-
 export default function AdminJobsPage() {
-  const [companies, setCompanies] = useState<CompanyJobs[]>([])
-  const [openCompanyId, setOpenCompanyId] = useState<number | null>(null)
+  const [openCompanyId, setOpenCompanyId] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
-  const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("token")
-      : null
+  const { data, loading } = useQuery(ADMIN_COMPANY_JOBS_QUERY)
 
-  /* ================= FETCH ================= */
-
-  useEffect(() => {
-    if (!token) return
-
-    setLoading(true)
-
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/jobs/admin/company-jobs`, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then(res => res.json())
-      .then(data => {
-  const companiesData = Array.isArray(data)
-    ? data
-    : Array.isArray(data.data)
-    ? data.data
-    : []
-
-  setCompanies(companiesData)
-  setLoading(false)
-})
-      .catch(err => {
-        console.error(err)
-        setLoading(false)
-      })
-  }, [token])
-
-  /* ================= STATS ================= */
+  const companies: CompanyJobs[] = data?.adminCompanyJobs ?? []
 
   const filteredCompanies = useMemo(
     () =>
@@ -122,8 +86,6 @@ export default function AdminJobsPage() {
     0
   )
 
-  /* ================= HELPERS ================= */
-
   const getEmploymentTypeColor = (type: string) => {
     const types: { [key: string]: string } = {
       FULL_TIME: "bg-green-100 text-green-700 border-green-200",
@@ -141,8 +103,6 @@ export default function AdminJobsPage() {
       .toLowerCase()
       .replace(/\b\w/g, l => l.toUpperCase())
 
-  /* ================= LOADING ================= */
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center">
@@ -154,35 +114,29 @@ export default function AdminJobsPage() {
     )
   }
 
-  /* ================= UI ================= */
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-6">
       <div className="max-w-7xl mx-auto">
+        <div className="mb-8 flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              Job Management
+            </h1>
+            <p className="text-gray-600">
+              Manage all job listings across companies
+            </p>
+          </div>
 
-        {/* HEADER */}
-       {/* HEADER */}
-<div className="mb-8 flex justify-between items-center">
-  <div>
-    <h1 className="text-3xl font-bold text-gray-900 mb-2">
-      Job Management
-    </h1>
-    <p className="text-gray-600">
-      Manage all job listings across companies
-    </p>
-  </div>
+          <div>
+            <a
+              href="/admin/jobs/create"
+              className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-2.5 rounded-lg shadow-md hover:shadow-lg transition font-medium"
+            >
+              + Create Job
+            </a>
+          </div>
+        </div>
 
-  <div>
-   <a
-  href="/admin/jobs/create"
-  className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-6 py-2.5 rounded-lg shadow-md hover:shadow-lg transition font-medium"
->
-  + Create Job
-</a>
-  </div>
-</div>
-
-        {/* STATS */}
         <div className="grid md:grid-cols-3 gap-6 mb-6">
           <StatCard
             label="Total Jobs"
@@ -206,7 +160,6 @@ export default function AdminJobsPage() {
           />
         </div>
 
-        {/* SEARCH */}
         <div className="bg-white rounded-xl shadow-sm  p-4 mb-6">
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -219,7 +172,6 @@ export default function AdminJobsPage() {
           </div>
         </div>
 
-        {/* COMPANIES */}
         <div className="space-y-4">
           {paginatedCompanies.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm p-12 text-center text-gray-500">

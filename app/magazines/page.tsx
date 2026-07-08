@@ -12,18 +12,18 @@
 import MagazineWithCoverStory from "@/components/magazine/MagazineWithCoverStory"
 import MagazineArchive from "@/components/magazine/MagazineArchive"
 import InThisIssue from "@/components/magazine/InThisIssue"
+import { graphqlRequest } from "@/lib/graphql/server"
+import { POSTS_LIST_QUERY } from "@/lib/graphql/queries"
 import type { Post } from "@/types/Post"
 
 export default async function MagazinesPage() {
+  const data = await graphqlRequest<{
+    posts: {
+      edges: { node: Post }[]
+    }
+  }>(POSTS_LIST_QUERY, { first: 50, page: 1 })
 
-  /* FETCH POSTS */
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`,
-    { cache: "no-store" }
-  )
-
-  const data = await res.json()
-  const posts: Post[] = data.data || data
+  const posts: Post[] = data.posts?.edges?.map((e) => e.node) ?? []
 
   return (
     <>

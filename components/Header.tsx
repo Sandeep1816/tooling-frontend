@@ -5,6 +5,8 @@ import Image from "next/image"
 import { Menu, X, ChevronDown } from "lucide-react"
 import { useState, useEffect } from "react"
 import type { Post } from "@/types/Post"
+import { graphqlRequest } from "@/lib/graphql/server"
+import { EVENTS_LIST_QUERY, SUPPLIERS_HEADER_QUERY, POSTS_LIST_QUERY } from "@/lib/graphql/queries"
 
 /* ================= TYPES ================= */
 type MegaType = "topics" | "resources" | null
@@ -74,34 +76,29 @@ export default function Header() {
 }, [])
 
   useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`)
-      .then(res => res.json())
-      .then(data => {
-        const posts = Array.isArray(data?.data) ? data.data : []
-        setAllPosts(posts)
-      })
+    graphqlRequest<{ posts: { edges: { node: Post }[] } }>(
+      POSTS_LIST_QUERY,
+      { first: 50 }
+    )
+      .then((data) => setAllPosts(data.posts.edges.map((e) => e.node)))
+      .catch((err) => console.error("Posts fetch error:", err))
   }, [])
 
   useEffect(() => {
-  fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/events`)
-    .then(res => res.json())
-    .then(data => {
-      setEvents(Array.isArray(data) ? data : [])
-    })
-    .catch(err => console.error("Events fetch error:", err))
-}, [])
+    graphqlRequest<{ events: { id: string; title: string; slug: string }[] }>(
+      EVENTS_LIST_QUERY,
+      { filter: { upcoming: true } }
+    )
+      .then((data) => setEvents(data.events ?? []))
+      .catch((err) => console.error("Events fetch error:", err))
+  }, [])
 
 useEffect(() => {
-  fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/suppliers?limit=4`)
-    .then(res => res.json())
-    .then(data => {
-      if (Array.isArray(data)) {
-        setSuppliers(data)
-      } else {
-        setSuppliers(data.data ?? [])
-      }
-    })
-    .catch(err => console.error("Suppliers fetch error:", err))
+  graphqlRequest<{ suppliers: { items: { id: string; name: string; slug: string; description: string; logoUrl?: string }[] } }>(
+    SUPPLIERS_HEADER_QUERY
+  )
+    .then((data) => setSuppliers(data.suppliers?.items ?? []))
+    .catch((err) => console.error("Suppliers fetch error:", err))
 }, [])
 
 

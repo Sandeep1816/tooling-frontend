@@ -1,30 +1,32 @@
 import Image from "next/image";
 import type { Post } from "@/types/Post";
+import { graphqlRequest } from "@/lib/graphql/server"
+import { POST_BY_SLUG_QUERY } from "@/lib/graphql/queries"
+import { resolveMediaUrl } from "@/lib/media"
 
 type Props = {
-  params: {
+  params: Promise<{
     slug: string;
-  };
+  }>;
 };
 
 export default async function ArticleDetailPage({ params }: Props) {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/posts/${params.slug}`,
-    { cache: "no-store" }
-  );
+  const { slug } = await params;
 
-  if (!res.ok) {
+  let post: Post | null = null;
+
+  try {
+    const data = await graphqlRequest<{ post: Post }>(POST_BY_SLUG_QUERY, {
+      slug,
+    });
+    post = data.post;
+  } catch {
     return <div className="p-10">Article not found</div>;
   }
 
-  const post: Post = await res.json();
-
-  const getImageUrl = (url?: string | null) => {
-    if (!url) return "/placeholder.svg";
-    if (url.startsWith("http")) return url;
-    const base = process.env.NEXT_PUBLIC_API_URL || "";
-    return `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`;
-  };
+  if (!post) {
+    return <div className="p-10">Article not found</div>;
+  }
 
   return (
     <main className="max-w-[1320px] mx-auto px-6 py-10">
@@ -34,7 +36,7 @@ export default async function ArticleDetailPage({ params }: Props) {
 
      <div className="relative w-full h-[520px] mb-8">
   <Image
-    src={getImageUrl(post.imageUrl)}
+    src={resolveMediaUrl(post.imageUrl)}
     alt={post.title}
     fill
     className="object-cover"

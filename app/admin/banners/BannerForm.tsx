@@ -2,12 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { BANNER_PLACEMENTS } from "@/lib/bannerPlacements";
+import { getUploadUrl } from "@/lib/graphql/server";
 
 type BannerPlacement = (typeof BANNER_PLACEMENTS)[number]["value"];
 
+export type BannerFormData = {
+  title: string;
+  imageUrl: string;
+  targetUrl: string;
+  placement: BannerPlacement;
+  status: "ACTIVE" | "INACTIVE";
+};
+
 type BannerFormProps = {
-  initialData?: any;
-  onSubmit: (data: any) => Promise<void>;
+  initialData?: Partial<BannerFormData>;
+  onSubmit: (data: BannerFormData) => Promise<void>;
 };
 
 export default function BannerForm({
@@ -21,7 +30,7 @@ export default function BannerForm({
     BANNER_PLACEMENTS[0].value as BannerPlacement
   );
 
-  const [status, setStatus] = useState("ACTIVE");
+  const [status, setStatus] = useState<"ACTIVE" | "INACTIVE">("ACTIVE");
   const [imageUrl, setImageUrl] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -34,7 +43,7 @@ export default function BannerForm({
       (initialData.placement ??
         BANNER_PLACEMENTS[0].value) as BannerPlacement
     );
-    setStatus(initialData.status ?? "ACTIVE");
+    setStatus((initialData.status as "ACTIVE" | "INACTIVE") ?? "ACTIVE");
     setImageUrl(initialData.imageUrl ?? "");
   }, [initialData]);
 
@@ -42,16 +51,18 @@ export default function BannerForm({
     const formData = new FormData();
     formData.append("image", file);
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/banners/upload`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: formData,
-      }
-    );
+    const res = await fetch(getUploadUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: formData,
+    });
+
+    if (!res.ok) {
+      alert("Upload failed");
+      return;
+    }
 
     const data = await res.json();
     setImageUrl(data.imageUrl);
@@ -61,20 +72,21 @@ export default function BannerForm({
     e.preventDefault();
     setLoading(true);
 
-    await onSubmit({
-      title,
-      imageUrl,
-      targetUrl,
-      placement,
-      status,
-    });
-
-    setLoading(false);
+    try {
+      await onSubmit({
+        title,
+        imageUrl,
+        targetUrl,
+        placement,
+        status,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
-      {/* Title */}
       <div>
         <label className="block font-medium mb-1">Banner Title</label>
         <input
@@ -85,7 +97,6 @@ export default function BannerForm({
         />
       </div>
 
-      {/* Redirect URL */}
       <div>
         <label className="block font-medium mb-1">Redirect URL</label>
         <input
@@ -96,7 +107,6 @@ export default function BannerForm({
         />
       </div>
 
-      {/* Placement */}
       <div>
         <label className="block font-medium mb-1">Placement</label>
         <select
@@ -114,20 +124,20 @@ export default function BannerForm({
         </select>
       </div>
 
-      {/* Status */}
       <div>
         <label className="block font-medium mb-1">Status</label>
         <select
           className="w-full border p-2 rounded"
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) =>
+            setStatus(e.target.value as "ACTIVE" | "INACTIVE")
+          }
         >
           <option value="ACTIVE">Active</option>
           <option value="INACTIVE">Inactive</option>
         </select>
       </div>
 
-      {/* Image Upload */}
       <div>
         <label className="block font-medium mb-1">Banner Image</label>
         <input
@@ -148,7 +158,6 @@ export default function BannerForm({
         )}
       </div>
 
-      {/* Submit */}
       <button
         type="submit"
         disabled={!imageUrl || loading}

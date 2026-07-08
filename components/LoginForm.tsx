@@ -4,71 +4,58 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
+import { useMutation } from "@/lib/apollo/hooks"
+import { LOGIN_MUTATION } from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage, saveAuthSession } from "@/lib/auth/session"
 
 export default function LoginForm() {
   const router = useRouter()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
+
+  const [login, { loading }] = useMutation(LOGIN_MUTATION)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
-    setLoading(true)
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password }),
-        }
-      )
+      const { data } = await login({
+        variables: { input: { email, password } },
+      })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || "Login failed")
+      const payload = data?.login
+      if (!payload) {
+        setError("Login failed")
         return
       }
 
-      // 🔐 Save token & user
-      localStorage.setItem("token", data.token)
-      localStorage.setItem("user", JSON.stringify(data.user))
-      window.dispatchEvent(new Event("userChanged"))
-
-      const user = data.user
-
-      // 🔁 Redirect by role
-      if (user.role === "admin") {
-        router.push("/admin/dashboard")
+      saveAuthSession(payload)
+      const user = {
+        ...payload.user,
+        role: String(payload.user.role).toLowerCase(),
       }
 
-      else if (user.role === "recruiter") {
-        // ✅ FIXED LOGIC
+      if (user.role === "admin") {
+        router.push("/admin/dashboard")
+      } else if (user.role === "recruiter") {
         if (!user.isOnboarded || !user.companyId) {
           router.push("/recruiter/onboarding")
         } else {
           router.push("/recruiter/dashboard")
         }
-      }
-
-      else if (user.role === "candidate") {
+      } else if (user.role === "candidate") {
         if (!user.isOnboarded) {
           router.push("/candidate/onboarding")
         } else {
           router.push("/candidate/feed")
         }
       }
-
     } catch (err) {
-      setError("Something went wrong. Try again.")
-    } finally {
-      setLoading(false)
+      setError(getGraphQLErrorMessage(err))
     }
   }
 

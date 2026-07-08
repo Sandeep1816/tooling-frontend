@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import Image from "next/image"
+import { useMutation } from "@/lib/apollo/hooks"
 import {
   LucideFacebook,
   LucideLinkedin,
@@ -9,6 +10,7 @@ import {
   LucideYoutube,
   LucideEye,
 } from "lucide-react"
+import { TRACK_SUPPLIER_CONNECTION_MUTATION } from "@/lib/graphql/operations"
 
 /* ---------------- HELPER ---------------- */
 function stripHtml(html: string) {
@@ -20,14 +22,11 @@ function stripHtml(html: string) {
 export default function SupplierRowCard({ supplier }: any) {
   const social = supplier.socialLinks || {}
   const views = supplier.views ?? 0
+  const [trackConnectionMutation] = useMutation(TRACK_SUPPLIER_CONNECTION_MUTATION)
 
-  /* 🔗 TRACK CONNECTION */
   const trackConnection = async () => {
     try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/suppliers/${supplier.id}/connection`,
-        { method: "POST" }
-      )
+      await trackConnectionMutation({ variables: { id: supplier.id } })
     } catch (err) {
       console.error("Failed to track connection", err)
     }

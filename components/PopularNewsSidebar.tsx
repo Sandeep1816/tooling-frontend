@@ -4,25 +4,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Post } from "../types/Post";
+import { graphqlRequest } from "@/lib/graphql/server";
+import { POSTS_LIST_QUERY } from "@/lib/graphql/queries";
 
 export default function PopularNewsSidebar() {
   const [posts, setPosts] = useState<Post[]>([]);
 
   useEffect(() => {
-    async function load() {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=6`
-      );
-      const data = await res.json();
-      setPosts(data.data || data);
-    }
-    load();
+    graphqlRequest<{ posts: { edges: { node: Post }[] } }>(
+      POSTS_LIST_QUERY,
+      { first: 6 }
+    )
+      .then((data) => setPosts(data.posts.edges.map((e) => e.node)))
+      .catch(console.error);
   }, []);
 
   const imageUrl = (post: Post) =>
     post.imageUrl?.startsWith("http")
       ? post.imageUrl
-      : `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`;
+      : `resolveMediaUrl(post.imageUrl)`;
 
   return (
     <div className="bg-white rounded-xl border p-6">

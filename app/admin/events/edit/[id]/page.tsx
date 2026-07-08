@@ -4,7 +4,13 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { Formik, Form, Field, ErrorMessage } from "formik"
 import * as Yup from "yup"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import UploadBox from "@/components/UploadBox"
+import {
+  EVENT_BY_ID_QUERY,
+  UPDATE_EVENT_MUTATION,
+} from "@/lib/graphql/operations"
+import { getUploadUrl } from "@/lib/graphql/server"
 
 const EventSchema = Yup.object({
   title: Yup.string().required("Event title is required"),
@@ -16,75 +22,62 @@ const EventSchema = Yup.object({
 })
 
 export default function EditEventPage() {
-  const { id } = useParams()
+  const { id } = useParams<{ id: string }>()
   const router = useRouter()
 
-  const [initialValues, setInitialValues] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { data, loading } = useQuery(EVENT_BY_ID_QUERY, {
+    variables: { id },
+    skip: !id,
+  })
 
-  // 🔥 Fetch event data (admin)
-  const fetchEvent = async () => {
-    try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/events/admin/all`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        }
-      )
+  const [updateEvent, { loading: saving }] = useMutation(UPDATE_EVENT_MUTATION)
 
-      const events = await res.json()
-      const event = events.find((e: any) => e.id === Number(id))
-
-      if (!event) {
-        alert("Event not found")
-        router.push("/admin/events")
-        return
-      }
-
-      setInitialValues({
-        title: event.title || "",
-        logoUrl: event.logoUrl || "",
-        bannerUrl: event.bannerUrl || "",
-        startDate: event.startDate?.slice(0, 10),
-        endDate: event.endDate?.slice(0, 10),
-        location: event.location || "",
-        websiteUrl: event.websiteUrl || "",
-        registerUrl: event.registerUrl || "",
-        calendarUrl: event.calendarUrl || "",
-        description: event.description || "",
-      })
-    } catch (error) {
-      console.error("Failed to fetch event", error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  const [initialValues, setInitialValues] = useState<{
+    title: string
+    logoUrl: string
+    bannerUrl: string
+    startDate: string
+    endDate: string
+    location: string
+    websiteUrl: string
+    registerUrl: string
+    calendarUrl: string
+    description: string
+  } | null>(null)
 
   useEffect(() => {
-    fetchEvent()
-  }, [id])
+    const event = data?.eventById
+    if (!event) return
 
-  // 🔥 Upload image (reused)
+    setInitialValues({
+      title: event.title || "",
+      logoUrl: event.logoUrl || "",
+      bannerUrl: event.bannerUrl || "",
+      startDate: event.startDate?.slice(0, 10),
+      endDate: event.endDate?.slice(0, 10),
+      location: event.location || "",
+      websiteUrl: event.websiteUrl || "",
+      registerUrl: event.registerUrl || "",
+      calendarUrl: event.calendarUrl || "",
+      description: event.description || "",
+    })
+  }, [data])
+
   const uploadImage = async (
     file: File,
-    setFieldValue: any,
+    setFieldValue: (field: string, value: string) => void,
     fieldName: "logoUrl" | "bannerUrl"
   ) => {
     const formData = new FormData()
     formData.append("image", file)
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: formData,
-      }
-    )
+    const res = await fetch(getUploadUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: formData,
+    })
 
     if (!res.ok) {
       alert("Upload failed")
@@ -95,29 +88,31 @@ export default function EditEventPage() {
     setFieldValue(fieldName, data.imageUrl)
   }
 
-  // 🔥 Update event
-  const handleSubmit = async (values: any) => {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/events/${id}`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
+  const handleSubmit = async (values: NonNullable<typeof initialValues>) => {
+    try {
+      await updateEvent({
+        variables: {
+          id,
+          input: {
+            ...values,
+            logoUrl: values.logoUrl || undefined,
+            bannerUrl: values.bannerUrl || undefined,
+            websiteUrl: values.websiteUrl || undefined,
+            registerUrl: values.registerUrl || undefined,
+            calendarUrl: values.calendarUrl || undefined,
+            location: values.location || undefined,
+          },
         },
-        body: JSON.stringify(values),
-      }
-    )
-
-    if (res.ok) {
+      })
       router.push("/admin/events")
-    } else {
-      alert("Failed to update event")
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to update event")
     }
   }
 
-  if (loading) return <p className="p-6">Loading event...</p>
-  if (!initialValues) return null
+  if (loading || !initialValues) {
+    return <p className="p-6">Loading event...</p>
+  }
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
@@ -131,42 +126,31 @@ export default function EditEventPage() {
       >
         {({ setFieldValue, values, isSubmitting }) => (
           <Form className="space-y-6">
-
-            {/* Title */}
             <div>
               <Field name="title" className="input" />
               <ErrorMessage name="title" component="p" className="error" />
             </div>
 
-            {/* Images */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <UploadBox
                 label="Event Logo"
                 value={values.logoUrl}
-                onUpload={(file) =>
-                  uploadImage(file, setFieldValue, "logoUrl")
-                }
+                onUpload={(file) => uploadImage(file, setFieldValue, "logoUrl")}
               />
-
               <UploadBox
                 label="Event Banner"
                 value={values.bannerUrl}
-                onUpload={(file) =>
-                  uploadImage(file, setFieldValue, "bannerUrl")
-                }
+                onUpload={(file) => uploadImage(file, setFieldValue, "bannerUrl")}
               />
             </div>
 
-            {/* Dates */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field type="date" name="startDate" className="input" />
               <Field type="date" name="endDate" className="input" />
             </div>
 
-            {/* Location */}
             <Field name="location" placeholder="Location" className="input" />
 
-            {/* URLs */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field name="websiteUrl" placeholder="Website URL" className="input" />
               <Field name="registerUrl" placeholder="Register URL" className="input" />
@@ -174,24 +158,17 @@ export default function EditEventPage() {
 
             <Field name="calendarUrl" placeholder="Add to Calendar URL" className="input" />
 
-            {/* Description */}
             <div>
-              <Field
-                as="textarea"
-                name="description"
-                rows={6}
-                className="input"
-              />
+              <Field as="textarea" name="description" rows={6} className="input" />
               <ErrorMessage name="description" component="p" className="error" />
             </div>
 
-            {/* Submit */}
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || saving}
               className="bg-blue-600 text-white px-6 py-2 rounded"
             >
-              {isSubmitting ? "Updating..." : "Update Event"}
+              {isSubmitting || saving ? "Updating..." : "Update Event"}
             </button>
           </Form>
         )}

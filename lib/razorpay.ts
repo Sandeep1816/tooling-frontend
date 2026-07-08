@@ -1,5 +1,12 @@
 "use client";
 
+import { getApolloClient } from "@/lib/apollo/client";
+import {
+  ACTIVATE_FREE_PLAN_MUTATION,
+  CREATE_PAYMENT_ORDER_MUTATION,
+  VERIFY_PAYMENT_MUTATION,
+} from "@/lib/graphql/operations";
+
 type RazorpayHandlerResponse = {
   razorpay_payment_id: string;
   razorpay_order_id: string;
@@ -72,22 +79,28 @@ export async function startPackagePayment({
     return;
   }
 
-  try {
-    const orderRes = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/payments/create-order`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ packageType, packageId }),
-      }
-    );
+  const client = getApolloClient();
 
-    const orderData = await orderRes.json();
-    if (!orderRes.ok) {
-      onError?.(orderData.error || "Could not start payment");
+  try {
+    const { data } = await client.mutate<{
+      createPaymentOrder: {
+        keyId: string
+        amount: number
+        currency: string
+        orderId: string
+        packageName: string
+        prefill?: { name?: string; email?: string }
+      }
+    }>({
+      mutation: CREATE_PAYMENT_ORDER_MUTATION,
+      variables: {
+        input: { packageType, packageId },
+      },
+    });
+
+    const orderData = data?.createPaymentOrder;
+    if (!orderData) {
+      onError?.("Could not start payment");
       return;
     }
 
@@ -101,21 +114,21 @@ export async function startPackagePayment({
       prefill: orderData.prefill,
       theme: { color: "#004d73" },
       handler: async (response) => {
-        const verifyRes = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/payments/verify`,
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
+        const { data: verifyData } = await client.mutate<{
+          verifyPayment: { success: boolean }
+        }>({
+          mutation: VERIFY_PAYMENT_MUTATION,
+          variables: {
+            input: {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
             },
-            body: JSON.stringify(response),
-          }
-        );
+          },
+        });
 
-        const verifyData = await verifyRes.json();
-        if (!verifyRes.ok) {
-          onError?.(verifyData.error || "Payment verification failed");
+        if (!verifyData?.verifyPayment?.success) {
+          onError?.("Payment verification failed");
           return;
         }
 
@@ -132,8 +145,8 @@ export async function startPackagePayment({
     });
 
     rzp.open();
-  } catch {
-    onError?.("Something went wrong. Please try again.");
+  } catch (err: unknown) {
+    onError?.(err instanceof Error ? err.message : "Something went wrong. Please try again.");
   }
 }
 
@@ -150,24 +163,22 @@ export async function activateFreePlan({
     return;
   }
 
-  try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/payments/activate-free`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+  const client = getApolloClient();
 
-    const data = await res.json();
-    if (!res.ok) {
-      onError?.(data.error || "Could not activate free plan");
+  try {
+    const { data } = await client.mutate<{
+      activateFreePlan: { success?: boolean; alreadyActive?: boolean; message?: string }
+    }>({
+      mutation: ACTIVATE_FREE_PLAN_MUTATION,
+    });
+
+    const result = data?.activateFreePlan;
+    if (!result?.success && !result?.alreadyActive) {
+      onError?.(result?.message || "Could not activate free plan");
       return;
     }
 
-    if (data.alreadyActive) {
+    if (result.alreadyActive) {
       onSuccess?.();
       window.location.href = "/recruiter/dashboard";
       return;
@@ -175,7 +186,7 @@ export async function activateFreePlan({
 
     onSuccess?.();
     window.location.href = "/packages/success?plan=free";
-  } catch {
-    onError?.("Something went wrong. Please try again.");
+  } catch (err: unknown) {
+    onError?.(err instanceof Error ? err.message : "Something went wrong. Please try again.");
   }
 }

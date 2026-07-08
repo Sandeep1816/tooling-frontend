@@ -12,11 +12,11 @@ import {
   Mail,
 } from "lucide-react"
 import ClaimCompanyBanner from "@/components/ClaimCompanyBanner"
-
-/* ================= TYPES ================= */
+import { graphqlRequest } from "@/lib/graphql/server"
+import { SUPPLIER_BY_SLUG_QUERY, POSTS_LIST_QUERY } from "@/lib/graphql/queries"
 
 type Article = {
-  id: number
+  id: string
   title: string
   slug: string
   excerpt?: string | null
@@ -25,8 +25,8 @@ type Article = {
 }
 
 type Supplier = {
-  id: number
-  companyId: number
+  id: string
+  companyId?: string | null
   name: string
   slug: string
   description: string
@@ -44,15 +44,13 @@ type Supplier = {
     youtube?: string
   }
   company?: {
-    id: number
+    id: string
     name: string
     location?: string
-    industry?: string
     website?: string
+    industry?: { name: string }
   }
 }
-
-/* ================= PAGE ================= */
 
 export default async function SupplierShowroomPage({
   params,
@@ -61,42 +59,54 @@ export default async function SupplierShowroomPage({
 }) {
   const { slug } = await params
 
-  /* ---------- FETCH SUPPLIER ---------- */
-  const supplierRes = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/suppliers/${slug}`,
-    { cache: "no-store" }
-  )
+  let supplier: Supplier | null = null
 
-  if (!supplierRes.ok) {
+  try {
+    const data = await graphqlRequest<{ supplier: Supplier }>(
+      SUPPLIER_BY_SLUG_QUERY,
+      { slug }
+    )
+    supplier = data.supplier
+  } catch {
+    supplier = null
+  }
+
+  if (!supplier) {
     return (
-      <div className="p-10 text-center text-gray-600">
-        Supplier not found
-      </div>
+      <div className="p-10 text-center text-gray-600">Supplier not found</div>
     )
   }
 
-  const supplier: Supplier = await supplierRes.json()
-  const social = supplier.socialLinks || {}
-
-  /* ---------- FETCH COMPANY ARTICLES ---------- */
-  const articlesRes = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${supplier.companyId}/articles`,
-    { cache: "no-store" }
-  )
-
   let articles: Article[] = []
-  if (articlesRes.ok) {
-    articles = await articlesRes.json()
+  if (supplier.companyId) {
+    try {
+      const postsData = await graphqlRequest<{
+        posts: {
+          edges: { node: Article }[]
+        }
+      }>(POSTS_LIST_QUERY, {
+        first: 20,
+        filter: { companyId: supplier.companyId, categorySlug: "articles" },
+      })
+      articles = postsData.posts.edges.map((e) => e.node)
+    } catch {
+      articles = []
+    }
   }
 
+  const social = (supplier.socialLinks || {}) as Supplier["socialLinks"]
   const websiteLink = supplier.website || supplier.company?.website
-
-  /* ================= UI ================= */
+  const tradeNames = Array.isArray(supplier.tradeNames)
+    ? supplier.tradeNames
+    : supplier.tradeNames
+    ? [String(supplier.tradeNames)]
+    : []
+  const videos = Array.isArray(supplier.videoGallery)
+    ? supplier.videoGallery
+    : []
 
   return (
     <div className="min-h-screen bg-gray-50">
-
-      {/* HERO */}
       <div className="relative h-[300px] bg-black">
         {supplier.coverImageUrl && (
           <img
@@ -107,22 +117,14 @@ export default async function SupplierShowroomPage({
         )}
       </div>
 
-      {/* MAIN CARD */}
       <div className="relative z-10 max-w-6xl mx-auto px-6 -mt-36">
         <div className="bg-white rounded-lg shadow p-10 border-t-4 border-red-700">
-
-          {/* TITLE */}
           <h1 className="text-3xl font-bold text-center text-[#0b3954]">
             {supplier.name}
           </h1>
 
-        
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-14 mt-12">
-
-            {/* LEFT SIDEBAR */}
             <aside className="space-y-8 md:col-span-1">
-
               {supplier.logoUrl && (
                 <img
                   src={supplier.logoUrl}
@@ -131,28 +133,17 @@ export default async function SupplierShowroomPage({
                 />
               )}
 
-                {/* LOCATION */}
-          {supplier.company?.location && (
-            <p className="flex items-center justify-center gap-2 text-gray-500 mt-2">
-              <MapPin size={16} />
-              {supplier.company.location}
-            </p>
-          )}
+              {supplier.company?.location && (
+                <p className="flex items-center justify-center gap-2 text-gray-500 mt-2">
+                  <MapPin size={16} />
+                  {supplier.company.location}
+                </p>
+              )}
 
-          {/* INDUSTRY */}
-          {/* {supplier.company?.industry && (
-            <p className="text-center text-sm text-gray-400 mt-1">
-             Industary {supplier.company.industry}
-            </p>
-          )} */}
-
-              {/* CONTACT INFO */}
               <div className="text-sm space-y-3">
-
-                {supplier.tradeNames && supplier.tradeNames.length > 0 && (
+                {tradeNames.length > 0 && (
                   <p className="text-gray-600">
-                    <strong>Trade Names:</strong>{" "}
-                    {supplier.tradeNames.join(", ")}
+                    <strong>Trade Names:</strong> {tradeNames.join(", ")}
                   </p>
                 )}
 
@@ -185,35 +176,33 @@ export default async function SupplierShowroomPage({
                 )}
               </div>
 
-              {/* SOCIAL LINKS */}
-              {(social.facebook ||
-                social.linkedin ||
-                social.twitter ||
-                social.youtube) && (
+              {(social?.facebook ||
+                social?.linkedin ||
+                social?.twitter ||
+                social?.youtube) && (
                 <div>
                   <h4 className="text-sm font-semibold text-gray-600 uppercase mb-3">
                     Connect
                   </h4>
-
                   <SocialLinksTracker supplierId={supplier.id}>
                     <div className="flex gap-4">
                       {social.facebook && (
-                        <a href={social.facebook} target="_blank">
+                        <a href={social.facebook} target="_blank" rel="noopener noreferrer">
                           <LucideFacebook className="w-5 h-5 text-[#3b5998]" />
                         </a>
                       )}
                       {social.linkedin && (
-                        <a href={social.linkedin} target="_blank">
+                        <a href={social.linkedin} target="_blank" rel="noopener noreferrer">
                           <LucideLinkedin className="w-5 h-5 text-[#0077b5]" />
                         </a>
                       )}
                       {social.twitter && (
-                        <a href={social.twitter} target="_blank">
+                        <a href={social.twitter} target="_blank" rel="noopener noreferrer">
                           <LucideTwitter className="w-5 h-5" />
                         </a>
                       )}
                       {social.youtube && (
-                        <a href={social.youtube} target="_blank">
+                        <a href={social.youtube} target="_blank" rel="noopener noreferrer">
                           <LucideYoutube className="w-5 h-5 text-red-600" />
                         </a>
                       )}
@@ -223,7 +212,6 @@ export default async function SupplierShowroomPage({
               )}
             </aside>
 
-            {/* RIGHT CONTENT */}
             <section className="md:col-span-2">
               <div
                 className="prose prose-sm max-w-none text-gray-700"
@@ -232,19 +220,15 @@ export default async function SupplierShowroomPage({
             </section>
           </div>
 
-          {/* Update Your Listing  */}
           <ClaimCompanyBanner />
 
-
-          {/* VIDEO GALLERY */}
-          {supplier.videoGallery && supplier.videoGallery.length > 0 && (
+          {videos.length > 0 && (
             <>
               <hr className="my-12" />
-              <VideoGallery videos={supplier.videoGallery} />
+              <VideoGallery videos={videos} />
             </>
           )}
 
-          {/* ARTICLES */}
           {articles.length > 0 && (
             <>
               <hr className="my-12" />

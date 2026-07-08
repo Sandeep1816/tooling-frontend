@@ -1,11 +1,12 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useQuery } from "@/lib/apollo/hooks"
 import Link from "next/link"
 import Image from "next/image"
+import { MAGAZINES_QUERY } from "@/lib/graphql/operations"
 
 type CoverStory = {
-  id: number
+  id: string
   title: string
   slug: string
   shortDescription?: string
@@ -14,7 +15,7 @@ type CoverStory = {
 }
 
 type Magazine = {
-  id: number
+  id: string
   title: string
   slug: string
   coverImageUrl?: string
@@ -23,19 +24,8 @@ type Magazine = {
 }
 
 export default function MagazineWithCoverStory() {
-  const [magazine, setMagazine] = useState<Magazine | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.length > 0) {
-          setMagazine(data[0])
-        }
-        setLoading(false)
-      })
-  }, [])
+  const { data, loading } = useQuery(MAGAZINES_QUERY)
+  const magazine: Magazine | null = data?.magazines?.[0] ?? null
 
   if (loading) return <p className="p-10">Loading...</p>
   if (!magazine) return null
@@ -43,8 +33,6 @@ export default function MagazineWithCoverStory() {
   return (
     <section className="bg-[#E9ECEF]">
       <div className="max-w-[1320px] mx-auto grid grid-cols-1 lg:grid-cols-[420px_1fr]">
-
-        {/* ================= LEFT – LATEST ISSUE ================= */}
         <div className="p-10 flex flex-col justify-center">
           <h2 className="text-[28px] font-bold text-[#003B5C] mb-8">
             Latest Issue
@@ -77,7 +65,6 @@ export default function MagazineWithCoverStory() {
           </span>
         </div>
 
-        {/* ================= RIGHT – COVER STORY HERO ================= */}
         {magazine.coverStory && (
           <div className="relative h-[520px]">
             <Image

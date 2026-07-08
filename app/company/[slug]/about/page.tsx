@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,121 +8,25 @@ import {
   MapPin,
   Users,
   Calendar,
-  Target,
-  Eye,
   Briefcase,
-  CheckCircle,
 } from "lucide-react";
-import Image from "next/image";
 import CompanyTabs from "@/components/company/CompanyTabs";
 import CompanyHeader from "@/components/company/CompanyHeader";
-
-type Company = {
-  id: number;
-  name: string;
-  slug: string;
-  tagline?: string;
-  logoUrl?: string;
-  isVerified: boolean; // Changed from optional to required
-  description?: string;
-  industry?: string;
-  location?: string;
-  companySize?: string;
-  website?: string;
-  founded?: number;
-  followers: number;
-  mission?: string;
-  vision?: string;
-  specialties?: string[];
-};
+import { useCompanyProfile } from "@/lib/company/useCompanyProfile";
 
 export default function AboutPage() {
   const params = useParams();
   const slug = params.slug as string;
-
-  const [company, setCompany] = useState<Company | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [following, setFollowing] = useState(false);
-
-  useEffect(() => {
-    async function loadCompany() {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${slug}`
-        );
-        const data = await res.json();
-        setCompany(data);
-
-        // Check if user is following this company
-        const token = localStorage.getItem("token");
-        if (token && data.id) {
-          const followStatusRes = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${data.id}/follow-status`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
-          if (followStatusRes.ok) {
-            const statusData = await followStatusRes.json();
-            setFollowing(statusData.isFollowing);
-          }
-        }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadCompany();
-  }, [slug]);
-
-  async function toggleFollow() {
-    if (!company) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("Login required");
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/follow`,
-        {
-          method: following ? "DELETE" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        setFollowing(!following);
-        setCompany((prev) =>
-          prev
-            ? {
-                ...prev,
-                followers: following ? prev.followers - 1 : prev.followers + 1,
-              }
-            : prev
-        );
-      } else if (response.status === 409) {
-        setFollowing(true);
-      } else {
-        const errorData = await response.json();
-        alert(errorData.error || "Action failed");
-      }
-    } catch (error) {
-      console.error("Follow toggle error:", error);
-      alert("An error occurred");
-    }
-  }
+  const { company, loading, following, toggleFollow } = useCompanyProfile(slug);
 
   if (loading) return <div className="p-10">Loading...</div>;
   if (!company) return <div className="p-10">Company not found.</div>;
+
+  const industryName =
+    typeof company.industry === "object"
+      ? company.industry?.name
+      : company.industry;
+  const followers = company.followerCount ?? company.followers ?? 0;
 
   return (
     <div className="bg-[#f3f2ef] min-h-screen">
@@ -152,7 +55,7 @@ export default function AboutPage() {
                 <Building2 className="text-blue-600 mt-1" />
                 <div>
                   <p className="font-medium">Industry</p>
-                  <p>{company.industry || "Not specified"}</p>
+                  <p>{industryName || "Not specified"}</p>
                 </div>
               </div>
               <div className="flex gap-3">
@@ -198,7 +101,7 @@ export default function AboutPage() {
                 <Briefcase className="text-blue-600 mt-1" />
                 <div>
                   <p className="font-medium">Followers</p>
-                  <p>{company.followers}</p>
+                  <p>{followers}</p>
                 </div>
               </div>
             </div>

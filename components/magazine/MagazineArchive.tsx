@@ -1,12 +1,13 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useQuery } from "@/lib/apollo/hooks"
 import Image from "next/image"
 import Link from "next/link"
 import SupplierAds from "@/components/SupplierAds"
+import { MAGAZINES_QUERY } from "@/lib/graphql/operations"
 
 type Magazine = {
-  id: number
+  id: string
   title: string
   slug: string
   coverImageUrl?: string
@@ -14,41 +15,16 @@ type Magazine = {
 }
 
 export default function MagazineArchive() {
-  const [magazines, setMagazines] = useState<Magazine[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-  fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines`)
-    .then((res) => res.json())
-    .then((data) => {
-      console.log("Magazines API Response:", data);
-
-      if (Array.isArray(data)) {
-        setMagazines(data);
-      } else {
-        setMagazines([]);
-      }
-    })
-    .catch((err) => {
-      console.error("Error fetching magazines:", err);
-      setMagazines([]);
-    })
-    .finally(() => {
-      setLoading(false);
-    });
-}, []);
+  const { data, loading } = useQuery(MAGAZINES_QUERY)
+  const magazines: Magazine[] = data?.magazines ?? []
 
   if (loading) return <p className="p-10">Loading...</p>
 
   return (
     <section className="bg-[#f2f2f2] py-20">
       <div className="max-w-[1200px] mx-auto px-6">
-
-        {/* HEADER */}
         <div className="flex justify-between items-center mb-16">
-          <h2 className="text-[32px] font-bold text-[#003B5C]">
-            Archive
-          </h2>
+          <h2 className="text-[32px] font-bold text-[#003B5C]">Archive</h2>
 
           <Link
             href="/magazines"
@@ -58,10 +34,7 @@ export default function MagazineArchive() {
           </Link>
         </div>
 
-        {/* MAIN GRID */}
         <div className="grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-20">
-
-          {/* LEFT – MAGAZINES */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-20">
             {magazines.map((mag) => {
               const date = mag.createdAt
@@ -73,19 +46,18 @@ export default function MagazineArchive() {
 
               return (
                 <div key={mag.id} className="text-center">
-
                   <Link href={`/magazines/${mag.slug}`}>
                     {mag.coverImageUrl && (
-  <div className="relative mx-auto w-full h-[300px]">
-    <Image
-      src={mag.coverImageUrl}
-      alt={mag.title}
-      fill
-      className="object-contain drop-shadow-md transition-transform duration-300 hover:scale-105"
-      sizes="(max-width:768px) 100vw, 300px"
-    />
-  </div>
-)}
+                      <div className="relative mx-auto w-full h-[300px]">
+                        <Image
+                          src={mag.coverImageUrl}
+                          alt={mag.title}
+                          fill
+                          className="object-contain drop-shadow-md transition-transform duration-300 hover:scale-105"
+                          sizes="(max-width:768px) 100vw, 300px"
+                        />
+                      </div>
+                    )}
                   </Link>
 
                   <h3 className="mt-6 text-[16px] font-semibold text-gray-700">
@@ -98,17 +70,14 @@ export default function MagazineArchive() {
                   >
                     READ NOW →
                   </Link>
-
                 </div>
               )
             })}
           </div>
 
-          {/* RIGHT – SIDEBAR ADS */}
           <aside className="space-y-6">
             <SupplierAds />
           </aside>
-
         </div>
       </div>
     </section>

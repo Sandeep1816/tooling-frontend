@@ -2,10 +2,14 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { useMutation } from "@/lib/apollo/hooks"
 import UploadBox from "@/components/UploadBox"
+import { getUploadUrl } from "@/lib/graphql/server"
+import { CREATE_MAGAZINE_AUTHOR_MUTATION } from "@/lib/graphql/operations"
 
 export default function CreateAuthorPage() {
   const router = useRouter()
+  const [createAuthor] = useMutation(CREATE_MAGAZINE_AUTHOR_MUTATION)
 
   const [form, setForm] = useState({
     name: "",
@@ -15,32 +19,31 @@ export default function CreateAuthorPage() {
   })
 
   async function handleSubmit() {
-    const token = localStorage.getItem("token")
-
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines/authors`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(form),
-    })
-
-    router.push("/admin/magazines/authors")
+    try {
+      await createAuthor({
+        variables: {
+          input: {
+            name: form.name,
+            profileImageUrl: form.profileImageUrl || undefined,
+            designation: form.designation || undefined,
+            linkedinUrl: form.linkedinUrl || undefined,
+          },
+        },
+      })
+      router.push("/admin/magazines")
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create author")
+    }
   }
 
   async function uploadFile(file: File) {
     const data = new FormData()
     data.append("image", file)
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/upload`, {
-      method: "POST",
-      body: data,
-    })
-
+    const res = await fetch(getUploadUrl(), { method: "POST", body: data })
     const result = await res.json()
 
-    setForm(prev => ({
+    setForm((prev) => ({
       ...prev,
       profileImageUrl: result.imageUrl,
     }))
@@ -53,7 +56,8 @@ export default function CreateAuthorPage() {
       <input
         placeholder="Author Name"
         className="w-full border p-3 rounded"
-        onChange={e => setForm({ ...form, name: e.target.value })}
+        value={form.name}
+        onChange={(e) => setForm({ ...form, name: e.target.value })}
       />
 
       <UploadBox
@@ -65,19 +69,18 @@ export default function CreateAuthorPage() {
       <input
         placeholder="Designation"
         className="w-full border p-3 rounded"
-        onChange={e => setForm({ ...form, designation: e.target.value })}
+        value={form.designation}
+        onChange={(e) => setForm({ ...form, designation: e.target.value })}
       />
 
       <input
         placeholder="LinkedIn URL"
         className="w-full border p-3 rounded"
-        onChange={e => setForm({ ...form, linkedinUrl: e.target.value })}
+        value={form.linkedinUrl}
+        onChange={(e) => setForm({ ...form, linkedinUrl: e.target.value })}
       />
 
-      <button
-        onClick={handleSubmit}
-        className="bg-black text-white px-6 py-2 rounded"
-      >
+      <button onClick={handleSubmit} className="bg-black text-white px-6 py-2 rounded">
         Create Author
       </button>
     </div>

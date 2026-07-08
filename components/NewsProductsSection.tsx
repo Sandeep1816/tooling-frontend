@@ -70,7 +70,7 @@ export default function NewsProductsSection({
                   post.imageUrl && post.imageUrl.startsWith("http")
                     ? post.imageUrl
                     : post.imageUrl
-                    ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
+                    ? `resolveMediaUrl(post.imageUrl)`
                     : "/placeholder.svg";
 
                 const date = post.publishedAt

@@ -1,6 +1,8 @@
 "use client"
 
 import Link from "next/link"
+import { useMutation } from "@/lib/apollo/hooks"
+import { INCREMENT_POST_SHARE_MUTATION } from "@/lib/graphql/operations"
 
 type SharePost = {
   title: string
@@ -18,6 +20,8 @@ type Props = {
 }
 
 export default function ShareSection({ post }: Props) {
+  const [incrementPostShare] = useMutation(INCREMENT_POST_SHARE_MUTATION)
+
   const pageUrl =
     typeof window !== "undefined"
       ? window.location.href
@@ -25,13 +29,9 @@ export default function ShareSection({ post }: Props) {
 
   const shareText = encodeURIComponent(post.title)
 
-  /* ✅ TRACK SHARE */
   const trackShare = async () => {
     try {
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/posts/${post.slug}/share`,
-        { method: "POST" }
-      )
+      await incrementPostShare({ variables: { slug: post.slug } })
     } catch (err) {
       console.error("Failed to track share")
     }

@@ -3,7 +3,15 @@
 import dynamic from "next/dynamic"
 import { useEffect, useState, FormEvent, ChangeEvent } from "react"
 import { useRouter } from "next/navigation"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import UploadBox from "@/components/UploadBox"
+import {
+  AUTHORS_QUERY,
+  CATEGORIES_QUERY,
+  CREATE_POST_MUTATION,
+} from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
+import { getUploadUrl } from "@/lib/graphql/server"
 
 import "react-quill-new/dist/quill.snow.css"
 const ReactQuill = dynamic(() => import("react-quill-new"), { ssr: false })
@@ -23,47 +31,37 @@ export default function CreateIndustryTalkPage() {
   })
 
   const [authors, setAuthors] = useState<any[]>([])
-  const [industryCategoryId, setIndustryCategoryId] = useState<number | null>(null)
+  const [industryCategoryId, setIndustryCategoryId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState("")
   const [initializing, setInitializing] = useState(true)
 
-  /* ================= LOAD AUTHORS + CATEGORY ================= */
+  const { data: authorsData } = useQuery(AUTHORS_QUERY)
+  const { data: categoriesData } = useQuery(CATEGORIES_QUERY)
+  const [createPost] = useMutation(CREATE_POST_MUTATION)
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [aRes, cRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/authors`),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/categories`)
-        ])
+    if (authorsData?.authors) {
+      setAuthors(authorsData.authors)
+    }
+  }, [authorsData])
 
-        const a = await aRes.json()
-        const c = await cRes.json()
+  useEffect(() => {
+    if (!categoriesData?.categories) return
 
-        setAuthors(a.data || a)
+    const industry = categoriesData.categories.find(
+      (cat: { slug?: string }) => cat.slug?.toLowerCase() === "industry-talks"
+    )
 
-        const categories = c.data || c
-        const industry = categories.find(
-          (cat: any) => cat.slug?.toLowerCase() === "industry-talks"
-        )
-
-        if (industry) {
-          setIndustryCategoryId(industry.id)
-        } else {
-          setMessage("⚠ Industry Talks category not found in database")
-        }
-      } catch (err) {
-        console.error("Initialization error:", err)
-        setMessage("Failed to load initial data")
-      } finally {
-        setInitializing(false)
-      }
+    if (industry) {
+      setIndustryCategoryId(industry.id)
+    } else {
+      setMessage("Industry Talks category not found in database")
     }
 
-    loadData()
-  }, [])
+    setInitializing(false)
+  }, [categoriesData])
 
   /* ================= AUTO SLUG ================= */
 
@@ -97,10 +95,10 @@ export default function CreateIndustryTalkPage() {
       const formData = new FormData()
       formData.append("image", file)
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-        { method: "POST", body: formData }
-      )
+      const res = await fetch(getUploadUrl(), {
+        method: "POST",
+        body: formData,
+      })
 
       const data = await res.json()
 
@@ -131,7 +129,6 @@ export default function CreateIndustryTalkPage() {
 
     const token = localStorage.getItem("token")
 
-    // Auto-generate excerpt if empty
     const generatedExcerpt =
       form.excerpt.trim() ||
       form.content.replace(/<[^>]+>/g, "").substring(0, 160) + "..."
@@ -142,36 +139,33 @@ export default function CreateIndustryTalkPage() {
     }
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/posts`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      await createPost({
+        variables: {
+          input: {
+            title: form.title,
+            slug: form.slug,
+            badge: form.badge || null,
+            imageUrl: form.imageUrl || null,
+            excerpt: generatedExcerpt,
+            content: form.content,
+            youtubeUrl: form.youtubeUrl || null,
+            authorId: form.authorId,
+            categoryId: industryCategoryId,
+          },
         },
-        body: JSON.stringify({
-          ...form,
-          excerpt: generatedExcerpt,
-          authorId: Number(form.authorId),
-          categoryId: industryCategoryId,
-        }),
+        context: {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
       })
 
-      const data = await res.json()
-      setLoading(false)
-
-      if (res.ok) {
-        setMessage("Industry Talk created successfully!")
-
-        setTimeout(() => {
-          router.push("/admin/industry-talks")
-        }, 1000)
-      } else {
-        setMessage(data?.error || "Something went wrong")
-      }
+      setMessage("Industry Talk created successfully!")
+      setTimeout(() => {
+        router.push("/admin/industry-talks")
+      }, 1000)
     } catch (err) {
-      console.error("Submit error:", err)
+      setMessage(getGraphQLErrorMessage(err))
+    } finally {
       setLoading(false)
-      setMessage("Network error")
     }
   }
 

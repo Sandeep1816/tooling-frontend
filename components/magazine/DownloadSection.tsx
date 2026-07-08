@@ -4,7 +4,7 @@ import { useState } from "react"
 import RegistrationModal from "./RegistrationModal"
 
 type Props = {
-  magazineId: number
+  magazineId: string
 }
 
 export default function DownloadSection({ magazineId }: Props) {

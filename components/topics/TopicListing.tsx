@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 import Link from "next/link"
 import { Post } from "@/types/Post"
@@ -24,11 +25,7 @@ export default function TopicListing({
   const gridPosts = rest.slice(0, 6)
 
   const getImage = (post: Post) =>
-    post.imageUrl?.startsWith("http")
-      ? post.imageUrl
-      : post.imageUrl
-      ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-      : "/placeholder.svg"
+    resolveMediaUrl(post.imageUrl)
 
   const formatDate = (date?: string) =>
     date

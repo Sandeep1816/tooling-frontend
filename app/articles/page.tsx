@@ -3,56 +3,42 @@ import SupplierAds from "@/components/SupplierAds"
 import MagazineGrid from "@/components/magazine/MagazineGrid"
 import type { Post } from "@/types/Post"
 import Link from "next/link"
-import Banner from "@/components/Banners/Banner";
+import Banner from "@/components/Banners/Banner"
+import { graphqlRequest } from "@/lib/graphql/server"
+import { MAGAZINES_LIST_QUERY } from "@/lib/graphql/queries"
+import { fetchPostsList, categorySlugOf } from "@/lib/graphql/posts"
+import { resolveMediaUrl } from "@/lib/media"
 
 export default async function ArticlesPage() {
+  const posts = await fetchPostsList(50)
 
-  /* ================= FETCH POSTS ================= */
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`,
-    { cache: "no-store" }
-  )
+  const magData = await graphqlRequest<{
+    magazines: {
+      id: string
+      title: string
+      slug: string
+      coverImageUrl?: string
+      description?: string | null
+    }[]
+  }>(MAGAZINES_LIST_QUERY)
 
-  const data = await res.json()
-  const posts: Post[] = data.data || data
-
-  /* ================= FETCH MAGAZINES ================= */
-  const magRes = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/magazines`,
-    { cache: "no-store" }
-  )
-
-  const magazines = await magRes.json()
-  const latestMagazine = magazines?.[0]
-
-  /* ================= HELPERS ================= */
-  const slugOf = (post: Post) =>
-    typeof post.category === "object"
-      ? post.category?.slug?.toLowerCase()
-      : String(post.category || "").toLowerCase()
-
-  const getImageUrl = (url?: string | null) => {
-    if (!url) return "/placeholder.svg"
-    if (url.startsWith("http")) return url
-
-    const base = process.env.NEXT_PUBLIC_API_URL || ""
-    return `${base.replace(/\/$/, "")}/${url.replace(/^\//, "")}`
-  }
+  const magazines = magData.magazines ?? []
+  const latestMagazine = magazines[0]
 
   /* ================= FILTER POSTS ================= */
-  const archivePosts = posts.filter(p => slugOf(p).includes("archive"))
+  const archivePosts = posts.filter(p => categorySlugOf(p).includes("archive"))
   const inThisIssuePosts = posts.filter(p =>
-    slugOf(p).includes("inthisissue")
+    categorySlugOf(p).includes("inthisissue")
   )
   const departmentPosts = posts.filter(p =>
-    slugOf(p).includes("department")
+    categorySlugOf(p).includes("department")
   )
   const productPosts = posts.filter(p =>
-    slugOf(p).includes("product")
+    categorySlugOf(p).includes("product")
   )
 
   const whatsNewPosts = posts
-    .filter(p => !slugOf(p).includes("whatsnew"))
+    .filter(p => !categorySlugOf(p).includes("whatsnew"))
     .slice(0, 5)
 
   const remainingIssues = inThisIssuePosts.slice(1)
@@ -110,7 +96,7 @@ export default async function ArticlesPage() {
           {latestMagazine && (
             <div className="relative h-[520px]">
   <Image
-    src={latestMagazine.coverImageUrl}
+    src={resolveMediaUrl(latestMagazine.coverImageUrl)}
     alt={latestMagazine.title}
     fill
     className="object-cover"
@@ -173,7 +159,7 @@ export default async function ArticlesPage() {
               <article key={post.id}>
                 <div className="relative w-full aspect-[16/9] mb-4">
   <Image
-    src={getImageUrl(post.imageUrl)}
+    src={resolveMediaUrl(post.imageUrl)}
     alt={post.title}
     fill
     className="object-cover rounded"

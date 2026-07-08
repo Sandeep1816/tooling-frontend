@@ -1,4 +1,6 @@
 "use client"
+
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 import Link from "next/link"
 import type { Post } from "@/types/Post"
@@ -35,11 +37,7 @@ export default function ArchiveListing({ posts }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-14">
           {posts.map((post) => {
             const imageUrl =
-              post.imageUrl?.startsWith("http")
-                ? post.imageUrl
-                : post.imageUrl
-                ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-                : "/placeholder.svg"
+              resolveMediaUrl(post.imageUrl)
 
             const date = post.publishedAt
               ? new Date(post.publishedAt).toLocaleDateString("en-US", {

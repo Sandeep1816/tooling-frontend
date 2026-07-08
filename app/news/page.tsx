@@ -1,37 +1,20 @@
 import Link from "next/link"
 import Image from "next/image"
-import type { Post } from "@/types/Post"
 import SupplierAds from "@/components/SupplierAds"
 import NewsletterForm from "@/components/news/NewsletterForm"
+import { fetchPostsList, categorySlugOf } from "@/lib/graphql/posts"
+import { resolveMediaUrl } from "@/lib/media"
 
 export default async function NewsPage() {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`,
-    { cache: "no-store" }
-  )
-
-  const data = await res.json()
-  const posts: Post[] = data.data || data
-
-  const slugOf = (post: Post) =>
-    typeof post.category === "object"
-      ? post.category?.slug?.toLowerCase()
-      : String(post.category || "").toLowerCase()
-
-  const getImage = (url?: string | null) => {
-    if (!url) return "/placeholder.svg"
-    if (url.startsWith("http")) return url
-    return `${process.env.NEXT_PUBLIC_API_URL}${url}`
-  }
+  const posts = await fetchPostsList(50)
 
   // ================= WHAT'S NEW =================
   const whatsNewPosts = posts
-    .filter((p) => slugOf(p).includes("whatsnew"))
+    .filter((p) => categorySlugOf(p).includes("whatsnew"))
     .slice(0, 5)
 
-  // ================= NEWS POSTS =================
   const newsPosts = posts.filter(
-    (p) => slugOf(p) === "news"
+    (p) => categorySlugOf(p) === "news"
   )
 
   return (
@@ -70,7 +53,7 @@ export default async function NewsPage() {
               >
                <div className="relative w-full h-[160px]">
   <Image
-    src={getImage(post.imageUrl)}
+    src={resolveMediaUrl(post.imageUrl)}
     alt={post.title}
     fill
     className="object-cover rounded"

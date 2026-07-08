@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import Link from "next/link"
+import { useQuery } from "@/lib/apollo/hooks"
 import {
   Briefcase,
   Users,
@@ -23,11 +24,15 @@ import RecruiterAnalyticsCharts, {
 } from "@/components/recruiter/RecruiterAnalyticsCharts"
 import type { JobPostingEligibility } from "@/lib/jobPosting"
 import type { ContentLimitEligibility } from "@/lib/packageLimits"
+import {
+  RECRUITER_DASHBOARD_QUERY,
+  RECRUITER_ME_QUERY,
+} from "@/lib/graphql/operations"
 
 /* ================= TYPES ================= */
 
 type RecentJob = {
-  id: number
+  id: string
   title: string
   applications?: number
 }
@@ -38,7 +43,7 @@ type Recruiter = {
   headline?: string
   location?: string
   avatarUrl?: string
-  Company?: {
+  company?: {
     name: string
     slug: string
     logoUrl?: string
@@ -47,7 +52,7 @@ type Recruiter = {
 }
 
 type Directory = {
-  id: number
+  id: string
   name: string
   slug: string
   status: "PENDING" | "APPROVED" | "REJECTED"
@@ -55,7 +60,7 @@ type Directory = {
 }
 
 type Article = {
-  id: number
+  id: string
   title: string
   status: string
   createdAt: string
@@ -87,7 +92,7 @@ type DashboardData = {
 }
 
 type PackagePurchase = {
-  id: number
+  id: string
   packageType: string
   packageName: string
   amount: number
@@ -153,8 +158,16 @@ function formatLimitValue(
 /* ================= PAGE ================= */
 
 export default function RecruiterDashboard() {
-  // ⚠️ HOOKS MUST ALWAYS RUN
   const allowed = useRecruiterGuard()
+
+  const { data: dashboardData, loading: dashboardLoading, refetch } = useQuery(
+    RECRUITER_DASHBOARD_QUERY,
+    { skip: !allowed }
+  )
+  const { data: meData } = useQuery(RECRUITER_ME_QUERY, { skip: !allowed })
+
+  const dashboardQuery = dashboardData?.recruiterDashboard
+  const recruiter = meData?.me ?? null
 
   const [dashboard, setDashboard] = useState<DashboardData>({
     jobsCount: 0,
@@ -164,100 +177,85 @@ export default function RecruiterDashboard() {
     recentActivity: [],
   })
 
-  const [recruiter, setRecruiter] = useState<Recruiter | null>(null)
-  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    if (!dashboardQuery) return
 
-useEffect(() => {
-  if (!allowed) return
-
-  async function loadAll() {
-    try {
-      const token = localStorage.getItem("token")
-
-      /* DASHBOARD */
-      const dashboardRes = await fetch(
-  `${process.env.NEXT_PUBLIC_API_URL}/api/recruiters/dashboard`,
-  {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Cache-Control": "no-cache",
-    },
-    cache: "no-store",
-  }
-)
-
-      if (!dashboardRes.ok) {
-        const errData = await dashboardRes.json().catch(() => ({}))
-        throw new Error(errData.error || "Failed to load dashboard")
-      }
-
-      const dashboardData = await dashboardRes.json()
-      console.log("DASHBOARD RESPONSE:", dashboardData)
-      console.log("ARTICLES:", dashboardData.articles)
-
-      setDashboard({
-        jobsCount: dashboardData.jobsCount ?? 0,
-        applicationsCount: dashboardData.applicationsCount ?? 0,
-        shortlistedCount: dashboardData.shortlistedCount ?? 0,
-        recentJobs: dashboardData.recentJobs ?? [],
-        directories: dashboardData.directories ?? [],
-        articles: dashboardData.articles ?? [],
-        recentActivity: dashboardData.recentActivity ?? [],
-        subscription: dashboardData.subscription ?? undefined,
-        recentPurchases: dashboardData.recentPurchases ?? [],
-        jobPosting: dashboardData.jobPosting ?? undefined,
-        articlePosting: dashboardData.articlePosting ?? undefined,
-        productListings: dashboardData.productListings ?? undefined,
-        analytics: dashboardData.analytics ?? undefined,
-      })
-
-      /* PROFILE */
-      const profileRes = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/recruiters/me`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      )
-
-      const recruiterData = await profileRes.json()
-      setRecruiter(recruiterData)
-
-      // 🔥 ADD THIS BLOCK RIGHT HERE
-const stored = localStorage.getItem("user")
-
-if (stored) {
-  const existing = JSON.parse(stored)
-
-  localStorage.setItem(
-    "user",
-    JSON.stringify({
-      ...existing,
-      avatarUrl: recruiterData.avatarUrl,
-    })
-  )
-
-  window.dispatchEvent(new Event("userChanged"))
-}
-
-
-    } catch (err) {
-      console.error("Dashboard load error:", err)
-    } finally {
-      setLoading(false)
+    const articlePosting: ContentLimitEligibility = {
+      canCreate: dashboardQuery.articlePosting.canCreate,
+      plan: dashboardQuery.articlePosting.plan,
+      planLabel: dashboardQuery.articlePosting.planLabel,
+      articlesThisYear: dashboardQuery.articlePosting.articlesThisYear,
+      effectiveLimit:
+        dashboardQuery.articlePosting.effectiveLimit === "Unlimited"
+          ? "Unlimited"
+          : Number(dashboardQuery.articlePosting.effectiveLimit),
+      remaining: dashboardQuery.articlePosting.remaining,
+      isUnlimited: dashboardQuery.articlePosting.isUnlimited,
+      periodLabel: dashboardQuery.articlePosting.periodLabel,
+      upgradeRequired: dashboardQuery.articlePosting.upgradeRequired,
+      message: dashboardQuery.articlePosting.message ?? undefined,
     }
-  }
 
-  loadAll()
+    const productListings: ContentLimitEligibility = {
+      canAdd: dashboardQuery.productListings.canAdd,
+      plan: dashboardQuery.productListings.plan,
+      activeListings: dashboardQuery.productListings.activeListings,
+      effectiveLimit:
+        dashboardQuery.productListings.effectiveLimit === "Unlimited"
+          ? "Unlimited"
+          : Number(dashboardQuery.productListings.effectiveLimit),
+      remaining: dashboardQuery.productListings.remaining,
+      isUnlimited: dashboardQuery.productListings.effectiveLimit === "Unlimited",
+      message: dashboardQuery.productListings.message ?? undefined,
+    }
 
-  // 🔥 AUTO REFRESH WHEN PAGE FOCUSES
-  const handleFocus = () => loadAll()
-  window.addEventListener("focus", handleFocus)
+    setDashboard({
+      jobsCount: dashboardQuery.jobsCount,
+      applicationsCount: dashboardQuery.applicationsCount,
+      shortlistedCount: dashboardQuery.shortlistedCount,
+      recentJobs: dashboardQuery.recentJobs,
+      directories: dashboardQuery.directories,
+      articles: dashboardQuery.articles,
+      recentActivity: dashboardQuery.recentActivity,
+      subscription: dashboardQuery.subscription,
+      recentPurchases: dashboardQuery.recentPurchases,
+      jobPosting: {
+        canPost: dashboardQuery.jobPosting.canPost,
+        plan: dashboardQuery.jobPosting.plan,
+        activeJobs: dashboardQuery.jobPosting.activeJobs,
+        effectiveLimit:
+          dashboardQuery.jobPosting.effectiveLimit === "Unlimited"
+            ? "Unlimited"
+            : Number(dashboardQuery.jobPosting.effectiveLimit),
+        remaining: dashboardQuery.jobPosting.remaining,
+        message: dashboardQuery.jobPosting.message ?? undefined,
+      },
+      articlePosting,
+      productListings,
+      analytics: dashboardQuery.analytics,
+    })
+  }, [dashboardQuery])
 
-  return () => {
-    window.removeEventListener("focus", handleFocus)
-  }
+  useEffect(() => {
+    if (!recruiter?.avatarUrl) return
+    const stored = localStorage.getItem("user")
+    if (!stored) return
+    const existing = JSON.parse(stored)
+    localStorage.setItem(
+      "user",
+      JSON.stringify({ ...existing, avatarUrl: recruiter.avatarUrl })
+    )
+    window.dispatchEvent(new Event("userChanged"))
+  }, [recruiter?.avatarUrl])
 
-}, [allowed])
+  useEffect(() => {
+    if (!allowed) return
+    const handleFocus = () => refetch()
+    window.addEventListener("focus", handleFocus)
+    return () => window.removeEventListener("focus", handleFocus)
+  }, [allowed, refetch])
+
+  const loading = dashboardLoading
 
 
   /* ================= RENDER GUARDS ================= */
@@ -685,9 +683,9 @@ if (stored) {
               </p>
             )}
 
-            {recruiter?.Company?.name && (
+            {recruiter?.company?.name && (
   <p className="text-sm font-medium text-blue-600 mt-1">
-    {recruiter.Company.name}
+    {recruiter.company.name}
   </p>
 )}
 
@@ -698,9 +696,9 @@ if (stored) {
               </p>
             )}
 
-            {recruiter?.Company?.slug && (
+            {recruiter?.company?.slug && (
   <Link
-    href={`/company/${recruiter.Company.slug}`}
+    href={`/company/${recruiter.company.slug}`}
     className="inline-block mt-4 text-sm text-blue-600 hover:text-blue-700 font-medium"
   >
     View Company Profile →

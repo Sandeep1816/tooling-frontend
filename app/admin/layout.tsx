@@ -8,6 +8,7 @@ import {
   FileText,
   Folder,
   LogOut,
+  User,
 } from "lucide-react"
 
 export default function AdminLayout({
@@ -33,19 +34,15 @@ export default function AdminLayout({
       return
     }
 
-    const token = localStorage.getItem("token")
+    const token =
+      localStorage.getItem("token") || localStorage.getItem("accessToken")
     const userRaw = localStorage.getItem("user")
 
-    if (!token || !userRaw) {
+    if (!token || !userRaw || userRaw === "undefined") {
+      localStorage.clear()
       router.replace("/admin/login")
       return
     }
-
-   if (!token || !userRaw || userRaw === "undefined") {
-  localStorage.clear()
-  router.replace("/admin/login")
-  return
-}
 
 let user = null
 
@@ -58,13 +55,7 @@ try {
   return
 }
 
-if (user?.role !== "admin") {
-  router.replace("/unauthorized")
-  return
-}
-
-
-    if (user.role !== "admin") {
+    if (user?.role !== "admin") {
       router.replace("/unauthorized")
       return
     }
@@ -73,7 +64,13 @@ if (user?.role !== "admin") {
     setChecking(false)
   }, [pathname, router])
 
-  if (checking) return null
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F4F6FA]">
+        <p className="text-sm text-gray-500">Loading admin panel...</p>
+      </div>
+    );
+  }
 
   if (pathname === "/admin/login") {
     return <>{children}</>
@@ -133,6 +130,27 @@ if (user?.role !== "admin") {
             label="All Posts"
             icon={<FileText size={16} />}
             active={pathname === "/admin/posts"}
+          />
+
+          <SidebarLink
+            href="/admin/posts/create"
+            label="New Post"
+            icon={<FileText size={16} />}
+            active={pathname === "/admin/posts/create"}
+          />
+
+          <SidebarLink
+            href="/admin/categories"
+            label="Categories"
+            icon={<Folder size={16} />}
+            active={pathname === "/admin/categories"}
+          />
+
+          <SidebarLink
+            href="/admin/authors"
+            label="Authors"
+            icon={<User size={16} />}
+            active={pathname === "/admin/authors"}
           />
 
           <SidebarLink

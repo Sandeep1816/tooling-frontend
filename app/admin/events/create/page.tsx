@@ -3,8 +3,10 @@
 import { Formik, Form, Field, ErrorMessage } from "formik"
 import * as Yup from "yup"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useMutation } from "@/lib/apollo/hooks"
 import UploadBox from "@/components/UploadBox"
+import { CREATE_EVENT_MUTATION } from "@/lib/graphql/operations"
+import { getUploadUrl } from "@/lib/graphql/server"
 
 const EventSchema = Yup.object({
   title: Yup.string().required("Event title is required"),
@@ -12,16 +14,12 @@ const EventSchema = Yup.object({
   endDate: Yup.date()
     .min(Yup.ref("startDate"), "End date must be after start date")
     .required("End date is required"),
-  description: Yup.string().required("Description is required")
+  description: Yup.string().required("Description is required"),
 })
 
 export default function CreateEventPage() {
   const router = useRouter()
-
-  const [uploading] = useState({
-    logo: false,
-    banner: false
-  })
+  const [createEvent, { loading }] = useMutation(CREATE_EVENT_MUTATION)
 
   const initialValues = {
     title: "",
@@ -33,32 +31,26 @@ export default function CreateEventPage() {
     websiteUrl: "",
     registerUrl: "",
     calendarUrl: "",
-    description: ""
+    description: "",
   }
 
-  // 🔥 Upload to Cloudinary (CORRECT)
   const uploadImage = async (
     file: File,
-    setFieldValue: any,
+    setFieldValue: (field: string, value: string) => void,
     fieldName: "logoUrl" | "bannerUrl"
   ) => {
     const formData = new FormData()
     formData.append("image", file)
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-        body: formData,
-      }
-    )
+    const res = await fetch(getUploadUrl(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+      },
+      body: formData,
+    })
 
     if (!res.ok) {
-      const text = await res.text()
-      console.error("Upload failed:", text)
       alert("Upload failed")
       return
     }
@@ -67,32 +59,25 @@ export default function CreateEventPage() {
     setFieldValue(fieldName, data.imageUrl)
   }
 
-  // 🔥 CREATE EVENT (FIXED ENDPOINT)
   const handleSubmit = async (values: typeof initialValues) => {
-    const token = localStorage.getItem("token")
-
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/events`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+    try {
+      await createEvent({
+        variables: {
+          input: {
+            ...values,
+            logoUrl: values.logoUrl || undefined,
+            bannerUrl: values.bannerUrl || undefined,
+            websiteUrl: values.websiteUrl || undefined,
+            registerUrl: values.registerUrl || undefined,
+            calendarUrl: values.calendarUrl || undefined,
+            location: values.location || undefined,
+            status: "DRAFT",
+          },
         },
-        body: JSON.stringify({
-          ...values,
-          status: "DRAFT",
-        }),
-      }
-    )
-
-    const data = await res.json()
-    console.log("CREATE EVENT RESPONSE:", data)
-
-    if (res.ok) {
+      })
       router.push("/admin/events")
-    } else {
-      alert(data.message || "Failed to create event")
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to create event")
     }
   }
 
@@ -107,42 +92,31 @@ export default function CreateEventPage() {
       >
         {({ setFieldValue, values, isSubmitting }) => (
           <Form className="space-y-6">
-
-            {/* Title */}
             <div>
               <Field name="title" placeholder="Event Title" className="input" />
               <ErrorMessage name="title" component="p" className="error" />
             </div>
 
-            {/* Images */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <UploadBox
                 label="Event Logo"
                 value={values.logoUrl}
-                onUpload={file =>
-                  uploadImage(file, setFieldValue, "logoUrl")
-                }
+                onUpload={(file) => uploadImage(file, setFieldValue, "logoUrl")}
               />
-
               <UploadBox
                 label="Event Banner"
                 value={values.bannerUrl}
-                onUpload={file =>
-                  uploadImage(file, setFieldValue, "bannerUrl")
-                }
+                onUpload={(file) => uploadImage(file, setFieldValue, "bannerUrl")}
               />
             </div>
 
-            {/* Dates */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field type="date" name="startDate" className="input" />
               <Field type="date" name="endDate" className="input" />
             </div>
 
-            {/* Location */}
             <Field name="location" placeholder="Location" className="input" />
 
-            {/* URLs */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field name="websiteUrl" placeholder="Website URL" className="input" />
               <Field name="registerUrl" placeholder="Register URL" className="input" />
@@ -150,7 +124,6 @@ export default function CreateEventPage() {
 
             <Field name="calendarUrl" placeholder="Add to Calendar URL" className="input" />
 
-            {/* Description */}
             <Field
               as="textarea"
               name="description"
@@ -159,13 +132,12 @@ export default function CreateEventPage() {
               className="input"
             />
 
-            {/* Submit */}
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || loading}
               className="bg-blue-600 text-white px-6 py-2 rounded"
             >
-              {isSubmitting ? "Saving..." : "Save as Draft"}
+              {isSubmitting || loading ? "Saving..." : "Save as Draft"}
             </button>
           </Form>
         )}

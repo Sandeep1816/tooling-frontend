@@ -1,5 +1,9 @@
 "use client";
+
 import { useState } from "react";
+import { useMutation } from "@/lib/apollo/hooks";
+import { CREATE_CATEGORY_MUTATION } from "@/lib/graphql/operations";
+import { getGraphQLErrorMessage } from "@/lib/auth/session";
 
 export default function CreateCategory() {
   const [form, setForm] = useState({
@@ -7,6 +11,8 @@ export default function CreateCategory() {
     slug: "",
   });
   const [message, setMessage] = useState("");
+
+  const [createCategory, { loading }] = useMutation(CREATE_CATEGORY_MUTATION);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -17,21 +23,13 @@ export default function CreateCategory() {
     setMessage("");
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/categories`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+      await createCategory({
+        variables: { input: form },
       });
-
-      if (res.ok) {
-        setMessage("✅ Category created successfully!");
-        setForm({ name: "", slug: "" });
-      } else {
-        const error = await res.json();
-        setMessage(`❌ Failed: ${error.message || "Unknown error"}`);
-      }
+      setMessage("✅ Category created successfully!");
+      setForm({ name: "", slug: "" });
     } catch (err) {
-      setMessage("❌ Network error, please try again.");
+      setMessage(`❌ Failed: ${getGraphQLErrorMessage(err)}`);
     }
   };
 
@@ -57,8 +55,12 @@ export default function CreateCategory() {
           className="w-full p-2 border rounded"
           required
         />
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
-          Create Category
+        <button
+          type="submit"
+          disabled={loading}
+          className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50"
+        >
+          {loading ? "Creating..." : "Create Category"}
         </button>
       </form>
       {message && <p className="mt-3 text-sm">{message}</p>}

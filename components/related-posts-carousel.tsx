@@ -1,49 +1,35 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-
-type Post = {
-  id: number
-  title: string
-  slug: string
-  excerpt?: string
-  imageUrl?: string
-  publishedAt?: string
-  category?: any
-}
+import type { Post } from "@/types/Post"
+import { graphqlRequest } from "@/lib/graphql/server"
+import { POSTS_LIST_QUERY } from "@/lib/graphql/queries"
 
 export default function RelatedPostsCarousel() {
   const [posts, setPosts] = useState<Post[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function fetchRelated() {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=50`
-        )
-        const data = await res.json()
-        const allPosts = Array.isArray(data.data) ? data.data : []
-
+    graphqlRequest<{ posts: { edges: { node: Post }[] } }>(
+      POSTS_LIST_QUERY,
+      { first: 50 }
+    )
+      .then((data) => {
+        const allPosts = data.posts.edges.map((edge) => edge.node)
         const filtered = allPosts
           .sort(
-            (a: Post, b: Post) =>
+            (a, b) =>
               new Date(b.publishedAt || "").getTime() -
               new Date(a.publishedAt || "").getTime()
           )
           .slice(0, 4)
-
         setPosts(filtered)
-      } catch (err) {
-        console.error("Failed to load related posts", err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchRelated()
+      })
+      .catch((err) => console.error("Failed to load related posts", err))
+      .finally(() => setLoading(false))
   }, [])
 
   if (loading) {
@@ -71,11 +57,7 @@ export default function RelatedPostsCarousel() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {posts.map((post) => {
             const imageUrl =
-              post.imageUrl?.startsWith("http")
-                ? post.imageUrl
-                : post.imageUrl
-                ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-                : "/placeholder.svg"
+              resolveMediaUrl(post.imageUrl)
 
             const date = post.publishedAt
               ? new Date(post.publishedAt).toLocaleDateString("en-US", {

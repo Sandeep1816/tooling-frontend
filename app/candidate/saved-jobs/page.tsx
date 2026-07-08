@@ -1,64 +1,26 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import Link from "next/link"
 import { MapPin, Clock, Bookmark, ArrowLeft } from "lucide-react"
 import { useCandidateGuard } from "@/lib/useCandidateGuard"
-
-type SavedJob = {
-  id: number
-  createdAt: string
-  Job: {
-    id: number
-    title: string
-    slug: string
-    location: string
-    employmentType: string
-    Company?: {
-      name: string
-      slug: string
-    }
-    companyName?: string
-  }
-}
+import {
+  SAVED_JOBS_QUERY,
+  UNSAVE_JOB_MUTATION,
+} from "@/lib/graphql/operations"
 
 export default function SavedJobsPage() {
   useCandidateGuard()
 
-  const [savedJobs, setSavedJobs] = useState<SavedJob[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data, loading, refetch } = useQuery(SAVED_JOBS_QUERY)
+  const [unsaveJob] = useMutation(UNSAVE_JOB_MUTATION)
 
-  useEffect(() => {
-    async function loadSavedJobs() {
-      try {
-        const token = localStorage.getItem("token")
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/saved/me`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        const data = await res.json()
-        if (Array.isArray(data)) setSavedJobs(data)
-      } catch (err) {
-        console.error("Failed to load saved jobs", err)
-      } finally {
-        setLoading(false)
-      }
-    }
+  const savedJobs = data?.savedJobs ?? []
 
-    loadSavedJobs()
-  }, [])
-
-  async function handleUnsave(jobId: number) {
+  async function handleUnsave(jobId: string) {
     try {
-      const token = localStorage.getItem("token")
-      await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/jobs/${jobId}/save`,
-        {
-          method: "DELETE",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      )
-      setSavedJobs((prev) => prev.filter((s) => s.Job.id !== jobId))
+      await unsaveJob({ variables: { jobId } })
+      refetch()
     } catch (err) {
       console.error("Failed to unsave job", err)
     }
@@ -92,39 +54,54 @@ export default function SavedJobsPage() {
         )}
 
         <div className="space-y-4">
-          {savedJobs.map((saved) => (
-            <div
-              key={saved.id}
-              className="bg-white rounded-lg shadow-sm p-5"
-            >
-              <Link
-                href={`/company/${saved.Job.Company?.slug ?? ""}`}
-                className="font-semibold text-sm text-blue-600 hover:underline"
-              >
-                {saved.Job.Company?.name || saved.Job.companyName || "Company"}
-              </Link>
+          {savedJobs.map((saved: {
+            id: string
+            createdAt: string
+            job: {
+              id: string
+              title: string
+              slug: string
+              location: string
+              employmentType: string
+              companyName?: string
+              company?: { name: string; slug: string }
+            }
+          }) => (
+            <div key={saved.id} className="bg-white rounded-lg shadow-sm p-5">
+              {saved.job.company?.slug ? (
+                <Link
+                  href={`/company/${saved.job.company.slug}`}
+                  className="font-semibold text-sm text-blue-600 hover:underline"
+                >
+                  {saved.job.company?.name || saved.job.companyName || "Company"}
+                </Link>
+              ) : (
+                <span className="font-semibold text-sm text-gray-700">
+                  {saved.job.company?.name || saved.job.companyName || "Company"}
+                </span>
+              )}
 
               <Link
-                href={`/jobs/${saved.Job.slug}`}
+                href={`/jobs/${saved.job.slug}`}
                 className="block text-lg font-medium mt-1 hover:underline"
               >
-                {saved.Job.title}
+                {saved.job.title}
               </Link>
 
               <div className="flex flex-wrap gap-4 text-xs text-gray-500 mt-2">
                 <span className="flex items-center gap-1">
                   <MapPin size={12} />
-                  {saved.Job.location}
+                  {saved.job.location}
                 </span>
                 <span className="flex items-center gap-1">
                   <Clock size={12} />
                   Saved on {new Date(saved.createdAt).toLocaleDateString()}
                 </span>
-                <span>{saved.Job.employmentType}</span>
+                <span>{saved.job.employmentType}</span>
               </div>
 
               <button
-                onClick={() => handleUnsave(saved.Job.id)}
+                onClick={() => handleUnsave(saved.job.id)}
                 className="mt-3 flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
                 <Bookmark size={14} className="fill-blue-600" />

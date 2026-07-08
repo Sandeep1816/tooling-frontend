@@ -10,6 +10,8 @@ import MyApplicationsPage from "../applications/page";
 import JobAlertsPage from "../job-alerts/page";
 import CandidateProfilePanel from "@/components/candidate/CandidateProfilePanel";
 import CandidateAvatar from "@/components/candidate/CandidateAvatar";
+import { fetchMyCandidateProfile } from "@/lib/candidateProfile";
+import { fetchPostsList } from "@/lib/graphql/posts";
 import type { Post } from "@/types/Post";
 
 type CandidateProfile = {
@@ -59,43 +61,21 @@ export default function CandidateFeedPage() {
   const meta = sectionMeta[activeSection] ?? sectionMeta.feed;
 
   useEffect(() => {
-    async function loadProfile() {
-      try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/candidates/me`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-        if (res.ok) {
-          const data = await res.json();
-          setProfile(data);
-        }
-      } catch (err) {
-        console.error("Failed to load profile", err);
-      }
-    }
-
-    loadProfile();
+    fetchMyCandidateProfile()
+      .then(setProfile)
+      .catch((err) => console.error("Failed to load profile", err));
   }, []);
 
   useEffect(() => {
-    async function loadTrendingArticles() {
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/articles/approved`,
-          { cache: "no-store" }
-        );
-        if (!res.ok) return;
-        const data = await res.json();
-        const list = Array.isArray(data) ? data : [];
+    fetchPostsList(50, { status: "APPROVED" })
+      .then((list) => {
         setPopularArticles(
           [...list].sort((a, b) => (b.views ?? 0) - (a.views ?? 0))
         );
-      } catch {
+      })
+      .catch(() => {
         // sidebar is optional
-      }
-    }
-    loadTrendingArticles();
+      });
   }, []);
 
   const displayName =

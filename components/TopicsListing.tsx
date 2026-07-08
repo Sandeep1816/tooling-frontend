@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Link from "next/link"
 import Image from "next/image"
 import { Post } from "@/types/Post"
@@ -82,11 +83,7 @@ export default function TopicsListing({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {posts.map((post) => {
                 const imageUrl =
-                  post.imageUrl?.startsWith("http")
-                    ? post.imageUrl
-                    : post.imageUrl
-                    ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-                    : "/placeholder.svg"
+                  resolveMediaUrl(post.imageUrl)
 
                 return (
                   <article key={post.id}>

@@ -6,12 +6,19 @@ import * as Yup from "yup"
 import RichTextEditor from "@/components/RichTextField"
 import UploadBox from "@/components/UploadBox"
 import { useState, useEffect } from "react"
+import { useApolloClient, useMutation, useQuery } from "@/lib/apollo/hooks"
 import { loadGeo } from "@/lib/geo"
 import PackageLimitModal from "@/components/recruiter/PackageLimitModal"
 import {
   fetchProductListingEligibility,
   type ContentLimitEligibility,
 } from "@/lib/packageLimits"
+import { getUploadUrl } from "@/lib/graphql/server"
+import {
+  CREATE_SUPPLIER_DIRECTORY_MUTATION,
+  INDUSTRIES_QUERY,
+  INDUSTRY_CHILDREN_QUERY,
+} from "@/lib/graphql/operations"
 
 function slugify(text: string) {
   return text
@@ -51,11 +58,14 @@ const DirectorySchema = Yup.object({
   state: Yup.string().required("State required"),
   city: Yup.string().required("City required"),
   address: Yup.string().min(10).required("Address required"),
-  industryId: Yup.number().required("Industry required"),
+  industryId: Yup.string().required("Industry required"),
 })
 
 export default function AddDirectoryPage() {
   const router = useRouter()
+  const client = useApolloClient()
+  const { data: industriesData } = useQuery(INDUSTRIES_QUERY)
+  const [createDirectory] = useMutation(CREATE_SUPPLIER_DIRECTORY_MUTATION)
 
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const [uploadingCover, setUploadingCover] = useState(false)
@@ -78,8 +88,9 @@ export default function AddDirectoryPage() {
   }, [])
 
   /* ================= INDUSTRY CASCADE ================= */
-  const [industryLevels, setIndustryLevels] = useState<any[][]>([])
-  const [industrySelected, setIndustrySelected] = useState<number[]>([])
+  type IndustryOption = { id: string; name: string; parentId?: string | null }
+  const [industryLevels, setIndustryLevels] = useState<IndustryOption[][]>([])
+  const [industrySelected, setIndustrySelected] = useState<string[]>([])
   const [geo, setGeo] = useState<Awaited<ReturnType<typeof loadGeo>> | null>(null)
 
   useEffect(() => {
@@ -87,21 +98,17 @@ export default function AddDirectoryPage() {
   }, [])
 
   useEffect(() => {
-    async function fetchIndustries() {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/industries`
-      )
-      const data = await res.json()
-      const list = Array.isArray(data) ? data : data.data ?? []
-      setIndustryLevels([list])
+    const roots =
+      industriesData?.industries?.filter((i: IndustryOption) => !i.parentId) ?? []
+    if (roots.length > 0) {
+      setIndustryLevels([roots])
     }
-    fetchIndustries()
-  }, [])
+  }, [industriesData])
 
   const handleIndustrySelect = async (
     levelIndex: number,
-    id: number,
-    setFieldValue: any
+    id: string,
+    setFieldValue: (field: string, value: string) => void
   ) => {
     const newSelected = [...industrySelected.slice(0, levelIndex), id]
     const newLevels = industryLevels.slice(0, levelIndex + 1)
@@ -110,10 +117,11 @@ export default function AddDirectoryPage() {
     setIndustryLevels(newLevels)
     setFieldValue("industryId", "")
 
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/industries/${id}/children`
-    )
-    const children = await res.json()
+    const { data: childData } = await client.query<{ industryChildren: IndustryOption[] }>({
+      query: INDUSTRY_CHILDREN_QUERY,
+      variables: { parentId: id },
+    })
+    const children: IndustryOption[] = childData?.industryChildren ?? []
 
     if (children.length > 0) {
       setIndustryLevels([...newLevels, children])
@@ -138,10 +146,7 @@ export default function AddDirectoryPage() {
       const formData = new FormData()
       formData.append("image", file)
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-        { method: "POST", body: formData }
-      )
+      const res = await fetch(getUploadUrl(), { method: "POST", body: formData })
 
       if (!res.ok) throw new Error("Image upload failed")
 
@@ -159,7 +164,6 @@ export default function AddDirectoryPage() {
   /* ================= SUBMIT ================= */
   async function submit(values: any, { setSubmitting, setStatus }: any) {
     try {
-      const token = localStorage.getItem("token")
       const geoLib = geo ?? (await loadGeo())
 
       const selectedCountry = geoLib.Country.getAllCountries().find(
@@ -176,34 +180,40 @@ export default function AddDirectoryPage() {
         selectedCountry?.name,
       ].filter(Boolean).join(", ")
 
-      const payload = {
-        ...values,
-        location,
-      }
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/suppliers`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(payload),
-        }
+      const socialLinks = Object.fromEntries(
+        Object.entries(values.socialLinks).filter(([, v]) => v)
       )
 
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}))
-        if (data.code === "PRODUCT_LISTING_LIMIT_REACHED") {
-          setShowLimitModal(true)
-          return
-        }
-        throw new Error(data.error || "Failed to submit directory")
+      await createDirectory({
+        variables: {
+          input: {
+            name: values.name,
+            slug: values.slug,
+            phoneNumber: values.phoneNumber,
+            email: values.email,
+            description: values.description,
+            website: values.website || undefined,
+            logoUrl: values.logoUrl || undefined,
+            coverImageUrl: values.coverImageUrl || undefined,
+            tradeNames: values.tradeNames.filter(Boolean),
+            videoGallery: values.videoGallery.filter(Boolean),
+            productSupplies: values.productSupplies.filter(Boolean),
+            socialLinks,
+            location,
+            address: values.address,
+            industryId: values.industryId,
+          },
+        },
+      })
+
+      router.push("/recruiter/directories")
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to submit directory"
+      if (message.toLowerCase().includes("limit")) {
+        setShowLimitModal(true)
+        return
       }
-      router.push("/recruiter/dashboard")
-    } catch (err: any) {
-      setStatus(err.message || "Failed to submit directory")
+      setStatus(message)
     } finally {
       setSubmitting(false)
     }
@@ -352,7 +362,7 @@ export default function AddDirectoryPage() {
           className="input mb-2"
           value={industrySelected[levelIndex] ?? ""}
           onChange={(e) =>
-            handleIndustrySelect(levelIndex, Number(e.target.value), setFieldValue)
+            handleIndustrySelect(levelIndex, e.target.value, setFieldValue)
           }
         >
           <option value="">Select Industry</option>

@@ -1,5 +1,5 @@
 import TopicsListing from "@/components/TopicsListing";
-import type { Post } from "@/types/Post";
+import { fetchPostsList } from "@/lib/graphql/posts";
 
 type Props = {
   params: {
@@ -8,19 +8,7 @@ type Props = {
 };
 
 export default async function TopicCategoryPage({ params }: Props) {
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/posts?category=${params.category}`,
-    { cache: "no-store" }
-  );
-
-  const data = await res.json();
-
-  // ✅ SAFELY EXTRACT ARRAY
-  const posts: Post[] = Array.isArray(data?.data)
-    ? data.data
-    : Array.isArray(data)
-    ? data
-    : [];
+  const posts = await fetchPostsList(50, { categorySlug: params.category });
 
   return (
     <TopicsListing

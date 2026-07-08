@@ -1,12 +1,17 @@
 "use client"
 import Image from "next/image"
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import Link from "next/link"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import { BANNER_PLACEMENTS } from "@/lib/bannerPlacements"
+import {
+  ADMIN_BANNERS_QUERY,
+  DELETE_BANNER_MUTATION,
+} from "@/lib/graphql/operations"
 import { Eye, Image as ImageIcon } from "lucide-react"
 
 type Banner = {
-  id: number
+  id: string
   title: string
   imageUrl: string
   placement: string
@@ -16,31 +21,13 @@ type Banner = {
 }
 
 export default function BannerListPage() {
-  const [banners, setBanners] = useState<Banner[]>([])
   const [placement, setPlacement] = useState("ALL")
-  const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
-  /* ================= FETCH ================= */
+  const { data, loading, refetch } = useQuery(ADMIN_BANNERS_QUERY)
+  const [deleteBannerMutation] = useMutation(DELETE_BANNER_MUTATION)
 
-  const fetchBanners = async () => {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/banners/admin/all`,
-      {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    )
-
-    const data = await res.json()
-    setBanners(Array.isArray(data) ? data : [])
-  }
-
-  useEffect(() => {
-    fetchBanners()
-  }, [])
-
-  /* ================= STATS ================= */
+  const banners: Banner[] = data?.adminBanners ?? []
 
   const totalBanners = banners.length
 
@@ -49,40 +36,37 @@ export default function BannerListPage() {
     [banners]
   )
 
-  /* ================= FILTER ================= */
-
   const filteredBanners =
     placement === "ALL"
       ? banners
-      : banners.filter(b => b.placement === placement)
+      : banners.filter((b) => b.placement === placement)
 
-  /* ================= DELETE ================= */
-
-  const deleteBanner = async (id: number) => {
+  const deleteBanner = async (id: string) => {
     if (!confirm("Delete this banner permanently?")) return
 
     setDeletingId(id)
 
-    await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/banners/${id}`,
-      {
-        method: "DELETE",
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token")}`,
-        },
-      }
-    )
-
-    setBanners(prev => prev.filter(b => b.id !== id))
-    setDeletingId(null)
+    try {
+      await deleteBannerMutation({ variables: { id } })
+      refetch()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Delete failed")
+    } finally {
+      setDeletingId(null)
+    }
   }
 
-  /* ================= UI ================= */
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        Loading...
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 space-y-6 bg-[#f6f8fc] min-h-screen">
 
-      {/* ================= HEADER ================= */}
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">
           Advertisement Banners
@@ -105,7 +89,6 @@ export default function BannerListPage() {
         </div>
       </div>
 
-      {/* ================= STATS ================= */}
       <div className="grid sm:grid-cols-2 gap-6">
         <StatCard
           label="Total Banners Posted"
@@ -122,7 +105,6 @@ export default function BannerListPage() {
         />
       </div>
 
-      {/* ================= FILTER ================= */}
       <div className="flex items-center gap-3">
         <label className="text-sm font-medium text-gray-600">
           Filter by placement:
@@ -130,11 +112,11 @@ export default function BannerListPage() {
 
         <select
           value={placement}
-          onChange={e => setPlacement(e.target.value)}
+          onChange={(e) => setPlacement(e.target.value)}
           className="border px-3 py-2 rounded bg-white"
         >
           <option value="ALL">All Placements</option>
-          {BANNER_PLACEMENTS.map(p => (
+          {BANNER_PLACEMENTS.map((p) => (
             <option key={p.value} value={p.value}>
               {p.label}
             </option>
@@ -142,7 +124,6 @@ export default function BannerListPage() {
         </select>
       </div>
 
-      {/* ================= TABLE ================= */}
       <div className="bg-white rounded-xl shadow overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-gray-100 text-gray-700">
@@ -158,21 +139,21 @@ export default function BannerListPage() {
           </thead>
 
           <tbody>
-            {filteredBanners.map(b => (
+            {filteredBanners.map((b) => (
               <tr key={b.id} className="border-t hover:bg-gray-50">
                 <td className="p-3 font-medium">{b.position}</td>
 
                 <td className="p-3">
-  <div className="relative w-24 h-14">
-    <Image
-      src={b.imageUrl}
-      alt={b.title || "Banner"}
-      fill
-      className="object-cover rounded border"
-      sizes="96px"
-    />
-  </div>
-</td>
+                  <div className="relative w-24 h-14">
+                    <Image
+                      src={b.imageUrl}
+                      alt={b.title || "Banner"}
+                      fill
+                      className="object-cover rounded border"
+                      sizes="96px"
+                    />
+                  </div>
+                </td>
 
                 <td className="p-3 font-medium">{b.title}</td>
 
@@ -190,7 +171,6 @@ export default function BannerListPage() {
                   </span>
                 </td>
 
-                {/* 👁️ CLICKS */}
                 <td className="p-3 font-semibold text-gray-700">
                   {b.clicks ?? 0}
                 </td>
@@ -228,7 +208,6 @@ export default function BannerListPage() {
   )
 }
 
-/* ================= STAT CARD ================= */
 function StatCard({
   label,
   value,

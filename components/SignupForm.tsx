@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { Eye, EyeOff } from "lucide-react"
+import { useMutation } from "@/lib/apollo/hooks"
 import RecruiterSubscriptionTerms from "@/components/RecruiterSubscriptionTerms"
+import {
+  RESEND_OTP_MUTATION,
+  SIGNUP_MUTATION,
+  VERIFY_OTP_MUTATION,
+} from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage, toGraphQLRole } from "@/lib/auth/session"
 
 
 type Role = "candidate" | "recruiter"
@@ -26,11 +33,16 @@ export default function SignupForm() {
   const [password, setPassword] = useState("")
   const [otp, setOtp] = useState("")
   const [step, setStep] = useState<"form" | "otp">("form")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [acceptedRecruiterTerms, setAcceptedRecruiterTerms] = useState(false)
+
+  const [signup, { loading: signupLoading }] = useMutation(SIGNUP_MUTATION)
+  const [verifyOtp, { loading: verifyLoading }] = useMutation(VERIFY_OTP_MUTATION)
+  const [resendOtp] = useMutation(RESEND_OTP_MUTATION)
+
+  const loading = signupLoading || verifyLoading
 
 
   useEffect(() => {
@@ -55,31 +67,21 @@ export default function SignupForm() {
       return
     }
 
-    setLoading(true)
-
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, password, role }),
-        }
-      )
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || "Signup failed")
-        return
-      }
+      await signup({
+        variables: {
+          input: {
+            email,
+            password,
+            role: toGraphQLRole(role),
+          },
+        },
+      })
 
       setStep("otp")
       setSuccess("Verification code sent to your email.")
-    } catch {
-      setError("Something went wrong.")
-    } finally {
-      setLoading(false)
+    } catch (err) {
+      setError(getGraphQLErrorMessage(err))
     }
   }
 
@@ -88,30 +90,14 @@ export default function SignupForm() {
   async function handleVerifyOtp(e: React.FormEvent) {
     e.preventDefault()
     setError("")
-    setLoading(true)
-
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/verify-otp`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, otp }),
-        }
-      )
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || "Invalid OTP")
-        return
-      }
+      await verifyOtp({
+        variables: { input: { email, otp } },
+      })
 
       router.push("/login?verified=true")
-    } catch {
-      setError("Verification failed")
-    } finally {
-      setLoading(false)
+    } catch (err) {
+      setError(getGraphQLErrorMessage(err))
     }
   }
 
@@ -122,25 +108,13 @@ export default function SignupForm() {
     setSuccess("")
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/resend-otp`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        }
-      )
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || "Failed to resend OTP")
-        return
-      }
+      await resendOtp({
+        variables: { input: { email } },
+      })
 
       setSuccess("New verification code sent.")
-    } catch {
-      setError("Failed to resend OTP")
+    } catch (err) {
+      setError(getGraphQLErrorMessage(err))
     }
   }
 

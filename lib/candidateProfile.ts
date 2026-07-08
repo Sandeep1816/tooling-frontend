@@ -1,4 +1,9 @@
+import { getApolloClient } from "@/lib/apollo/client";
+import { ME_QUERY, UPDATE_USER_MUTATION } from "@/lib/graphql/operations";
+import { getUploadUrl } from "@/lib/graphql/server";
+
 type CandidateProfile = {
+  id?: string;
   email: string;
   username: string;
   fullName?: string;
@@ -7,16 +12,19 @@ type CandidateProfile = {
   location?: string;
   avatarUrl?: string;
   websiteUrl?: string;
+  isOnboarded?: boolean;
 };
 
 export async function uploadCandidateImage(file: File): Promise<string> {
   const formData = new FormData();
   formData.append("image", file);
 
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-    { method: "POST", body: formData }
-  );
+  const token = localStorage.getItem("token");
+  const res = await fetch(getUploadUrl(), {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+    body: formData,
+  });
 
   const data = await res.json();
   if (!res.ok || !data.imageUrl) {
@@ -27,40 +35,58 @@ export async function uploadCandidateImage(file: File): Promise<string> {
 }
 
 export async function fetchMyCandidateProfile(): Promise<CandidateProfile> {
-  const token = localStorage.getItem("token");
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/candidates/me`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  const client = getApolloClient();
+  const { data } = await client.query<{ me: CandidateProfile }>({
+    query: ME_QUERY,
+    fetchPolicy: "network-only",
+  });
 
-  if (!res.ok) {
+  if (!data?.me) {
     throw new Error("Failed to load profile");
   }
 
-  return res.json();
+  return data.me;
 }
 
 export async function updateMyCandidateProfile(
   profile: Partial<CandidateProfile>
 ): Promise<CandidateProfile> {
-  const token = localStorage.getItem("token");
-  const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/api/candidates/me`,
-    {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify(profile),
-    }
-  );
+  const client = getApolloClient();
 
-  if (!res.ok) {
+  let userId = profile.id;
+  if (!userId) {
+    const { data: meData } = await client.query<{ me: CandidateProfile }>({
+      query: ME_QUERY,
+      fetchPolicy: "network-only",
+    });
+    userId = meData?.me?.id;
+  }
+
+  if (!userId) {
+    throw new Error("Not authenticated");
+  }
+
+  const { data } = await client.mutate<{ updateUser: CandidateProfile }>({
+    mutation: UPDATE_USER_MUTATION,
+    variables: {
+      id: userId,
+      input: {
+        fullName: profile.fullName,
+        headline: profile.headline,
+        about: profile.about,
+        location: profile.location,
+        avatarUrl: profile.avatarUrl,
+        websiteUrl: profile.websiteUrl,
+        isOnboarded: profile.isOnboarded,
+      },
+    },
+  });
+
+  if (!data?.updateUser) {
     throw new Error("Failed to update profile");
   }
 
-  return res.json();
+  return data.updateUser;
 }
 
 export function syncCandidateUserInStorage(profile: CandidateProfile) {
@@ -75,6 +101,7 @@ export function syncCandidateUserInStorage(profile: CandidateProfile) {
       avatarUrl: profile.avatarUrl,
       fullName: profile.fullName,
       username: profile.username,
+      isOnboarded: profile.isOnboarded ?? existing.isOnboarded,
     })
   );
   window.dispatchEvent(new Event("userChanged"));

@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@apollo/client": "^4.2.6",
     "@hello-pangea/dnd": "^18.0.1",
     "@hookform/resolvers": "^3.10.0",
     "@marsidev/react-turnstile": "^1.4.2",
@@ -52,6 +53,7 @@
     "date-fns": "4.1.0",
     "embla-carousel-react": "8.5.1",
     "formik": "^2.4.9",
+    "graphql": "^17.0.2",
     "input-otp": "1.4.1",
     "isomorphic-dompurify": "^2.35.0",
     "lucide-react": "^0.454.0",
@@ -67,6 +69,7 @@
     "react-resizable-panels": "^2.1.7",
     "recharts": "2.15.4",
     "remixicon": "^4.7.0",
+    "rxjs": "^7.8.2",
     "sonner": "^1.7.4",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",

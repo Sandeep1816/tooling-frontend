@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Link from "next/link"
 import Image from "next/image"
 import { useMemo } from "react"
@@ -36,11 +37,7 @@ export default function LatestHero({ post, posts }: LatestHeroProps) {
   /* ================= HERO IMAGE ================= */
 
   const imageUrl =
-    post.imageUrl?.startsWith("http")
-      ? post.imageUrl
-      : post.imageUrl
-      ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-      : "/placeholder.svg"
+    resolveMediaUrl(post.imageUrl)
 
   const date = post.publishedAt
     ? new Date(post.publishedAt).toLocaleDateString("en-US", {
@@ -143,11 +140,7 @@ export default function LatestHero({ post, posts }: LatestHeroProps) {
           <div className="space-y-6">
             {latestPosts.map((item) => {
               const thumb =
-                item.imageUrl?.startsWith("http")
-                  ? item.imageUrl
-                  : item.imageUrl
-                  ? `${process.env.NEXT_PUBLIC_API_URL}${item.imageUrl}`
-                  : "/placeholder.svg"
+                resolveMediaUrl(item.imageUrl)
 
               const itemDate = item.publishedAt
                 ? new Date(item.publishedAt).toLocaleDateString("en-US", {

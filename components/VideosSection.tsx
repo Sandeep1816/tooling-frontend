@@ -1,5 +1,6 @@
 "use client"
 
+import { resolveMediaUrl } from "@/lib/media";
 import Image from "next/image"
 import Link from "next/link"
 import { useMemo, useState } from "react"
@@ -65,7 +66,7 @@ export default function VideosSection({ posts }: Props) {
     v?.imageUrl?.startsWith("http")
       ? v.imageUrl
       : v?.imageUrl
-      ? `${process.env.NEXT_PUBLIC_API_URL}${v.imageUrl}`
+      ? `resolveMediaUrl(v.imageUrl)`
       : "/placeholder.jpg"
 
   const date = (d?: string | null) =>

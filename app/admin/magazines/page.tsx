@@ -1,113 +1,38 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import CreateIssuePost from "@/components/CreateIssuePost" // ✅ NEW IMPORT
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
+import CreateIssuePost from "@/components/CreateIssuePost"
+import {
+  ADMIN_MAGAZINES_QUERY,
+  DELETE_MAGAZINE_MUTATION,
+  MAGAZINE_AUTHORS_QUERY,
+  COVER_STORIES_QUERY,
+} from "@/lib/graphql/operations"
 
 export default function AdminMagazinesPage() {
-  const [magazines, setMagazines] = useState<any[]>([])
-  const [authors, setAuthors] = useState<any[]>([])
-  const [coverStories, setCoverStories] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const { data, loading, refetch } = useQuery(ADMIN_MAGAZINES_QUERY)
+  const { data: authorsData } = useQuery(MAGAZINE_AUTHORS_QUERY)
+  const { data: coverData } = useQuery(COVER_STORIES_QUERY)
+  const [deleteMagazine] = useMutation(DELETE_MAGAZINE_MUTATION)
 
-  const [showIssueForm, setShowIssueForm] = useState(false) // ✅ NEW STATE
+  const [showIssueForm, setShowIssueForm] = useState(false)
 
+  const magazines = data?.adminMagazines ?? []
+  const authors = authorsData?.magazineAuthors ?? []
+  const coverStories = coverData?.coverStories ?? []
 
-useEffect(() => {
-  const token = localStorage.getItem("token")
-
-  async function fetchData() {
-    try {
-      const [magRes, authRes, coverRes] = await Promise.all([
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines/admin`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines/authors`),
-        fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines/cover-stories`),
-      ])
-      // ✅ LOGS MUST BE HERE — BEFORE .json()
-console.log("=== API URL ===", process.env.NEXT_PUBLIC_API_URL)
-console.log("mag:", magRes.status, magRes.url)
-console.log("auth:", authRes.status, authRes.url)
-console.log("cover:", coverRes.status, coverRes.url)
-
-const magText = await magRes.clone().text()
-const authText = await authRes.clone().text()
-const coverText = await coverRes.clone().text()
-console.log("mag body:", magText.slice(0, 300))
-console.log("auth body:", authText.slice(0, 300))
-console.log("cover body:", coverText.slice(0, 300))
-
-
-console.log({
-  magazine: {
-    status: magRes.status,
-    ok: magRes.ok,
-    url: magRes.url,
-  },
-  authors: {
-    status: authRes.status,
-    ok: authRes.ok,
-    url: authRes.url,
-  },
-  coverStories: {
-    status: coverRes.status,
-    ok: coverRes.ok,
-    url: coverRes.url,
-  },
-})
-
-if (!magRes.ok) {
-  const body = await magRes.text()
-  console.error("Magazine API:", body)
-  return
-}
-
-if (!authRes.ok) {
-  const body = await authRes.text()
-  console.error("Authors API:", body)
-  return
-}
-
-if (!coverRes.ok) {
-  const body = await coverRes.text()
-  console.error("Cover Stories API:", body)
-  return
-}
-
-
-      const [mags, auths, covers] = await Promise.all([
-        magRes.json(),
-        authRes.json(),
-        coverRes.json(),
-      ])
-        
-      setMagazines(mags)
-      setAuthors(auths)
-      setCoverStories(covers)
-
-    } catch (error) {
-      console.error("Fetch error:", error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  fetchData()
-}, [])
-
-  async function deleteMagazine(id: number) {
-    const token = localStorage.getItem("token")
-
+  async function handleDelete(id: string) {
     if (!confirm("Delete this magazine?")) return
 
-    await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines/${id}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
-    })
-
-    setMagazines(prev => prev.filter(m => m.id !== id))
+    try {
+      await deleteMagazine({ variables: { id } })
+      refetch()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Delete failed")
+    }
   }
 
   if (loading) {
@@ -120,8 +45,6 @@ if (!coverRes.ok) {
 
   return (
     <div className="p-10 max-w-7xl mx-auto space-y-12">
-
-      {/* ================= HEADER ================= */}
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Manage Magazines</h1>
 
@@ -147,9 +70,8 @@ if (!coverRes.ok) {
             + Create Cover Story
           </Link>
 
-          {/* ✅ NEW ISSUE BUTTON (ADDED ONLY) */}
           <button
-            onClick={() => setShowIssueForm(prev => !prev)}
+            onClick={() => setShowIssueForm((prev) => !prev)}
             className="bg-green-600 text-white px-5 py-2 rounded"
           >
             + Issue
@@ -157,14 +79,12 @@ if (!coverRes.ok) {
         </div>
       </div>
 
-      {/* ✅ ISSUE FORM (ADDED ONLY) */}
       {showIssueForm && (
         <div className="bg-gray-50 p-6 rounded-xl border">
           <CreateIssuePost />
         </div>
       )}
 
-      {/* ================= MAGAZINES ================= */}
       <div>
         <h2 className="text-xl font-semibold mb-4">Magazines</h2>
 
@@ -173,10 +93,16 @@ if (!coverRes.ok) {
         )}
 
         <div className="grid gap-6">
-          {magazines.map(m => (
+          {magazines.map((m: {
+            id: string
+            title: string
+            coverImageUrl?: string
+            author?: { name: string }
+            coverStory?: { title: string }
+          }) => (
             <div
               key={m.id}
-              className="bg-white  rounded-xl shadow p-6 flex gap-6"
+              className="bg-white rounded-xl shadow p-6 flex gap-6"
             >
               <div className="w-32 h-40 relative shrink-0">
                 {m.coverImageUrl ? (
@@ -197,11 +123,11 @@ if (!coverRes.ok) {
                 <h3 className="text-lg font-semibold">{m.title}</h3>
 
                 <p className="text-sm text-gray-600">
-                  Author: {m.MagazineAuthor?.name || "—"}
+                  Author: {m.author?.name || "—"}
                 </p>
 
                 <p className="text-sm text-gray-600">
-                  Cover Story: {m.CoverStory?.title || "—"}
+                  Cover Story: {m.coverStory?.title || "—"}
                 </p>
 
                 <div className="flex gap-4 pt-3">
@@ -213,7 +139,7 @@ if (!coverRes.ok) {
                   </Link>
 
                   <button
-                    onClick={() => deleteMagazine(m.id)}
+                    onClick={() => handleDelete(m.id)}
                     className="text-red-600 text-sm"
                   >
                     Delete
@@ -225,7 +151,6 @@ if (!coverRes.ok) {
         </div>
       </div>
 
-      {/* ================= AUTHORS ================= */}
       <div>
         <h2 className="text-xl font-semibold mb-4">Authors</h2>
 
@@ -234,18 +159,15 @@ if (!coverRes.ok) {
         )}
 
         <div className="grid md:grid-cols-3 gap-6">
-          {authors.map(author => (
+          {authors.map((author: { id: string; name: string; designation?: string }) => (
             <div key={author.id} className="border p-4 rounded shadow bg-white">
               <p className="font-semibold">{author.name}</p>
-              <p className="text-sm text-gray-500">
-                {author.designation || "—"}
-              </p>
+              <p className="text-sm text-gray-500">{author.designation || "—"}</p>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ================= COVER STORIES ================= */}
       <div>
         <h2 className="text-xl font-semibold mb-4">Cover Stories</h2>
 
@@ -254,7 +176,11 @@ if (!coverRes.ok) {
         )}
 
         <div className="grid md:grid-cols-2 gap-6">
-          {coverStories.map(story => (
+          {coverStories.map((story: {
+            id: string
+            title: string
+            author?: { name: string }
+          }) => (
             <div key={story.id} className="border p-4 rounded shadow bg-white">
               <p className="font-semibold">{story.title}</p>
               <p className="text-sm text-gray-500">
@@ -264,7 +190,6 @@ if (!coverRes.ok) {
           ))}
         </div>
       </div>
-
     </div>
   )
 }

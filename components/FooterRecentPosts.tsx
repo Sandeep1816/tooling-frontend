@@ -4,19 +4,20 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { Post } from "@/types/Post";
+import { graphqlRequest } from "@/lib/graphql/server";
+import { POSTS_LIST_QUERY } from "@/lib/graphql/queries";
+import { resolveMediaUrl } from "@/lib/media";
 
 export default function FooterRecentPosts() {
   const [posts, setPosts] = useState<Post[]>([]);
 
   useEffect(() => {
-    async function fetchPosts() {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/posts?limit=5`
-      );
-      const data = await res.json();
-      setPosts(data.data || data || []);
-    }
-    fetchPosts();
+    graphqlRequest<{ posts: { edges: { node: Post }[] } }>(
+      POSTS_LIST_QUERY,
+      { first: 5 }
+    )
+      .then((data) => setPosts(data.posts.edges.map((e) => e.node)))
+      .catch(console.error);
   }, []);
 
   return (
@@ -45,11 +46,7 @@ export default function FooterRecentPosts() {
               >
                 <Image
                   src={
-                    post.imageUrl?.startsWith("http")
-                      ? post.imageUrl
-                      : post.imageUrl
-                        ? `${process.env.NEXT_PUBLIC_API_URL}${post.imageUrl}`
-                        : "/placeholder.jpg"
+                    resolveMediaUrl(post.imageUrl)
                   }
                   alt={post.title}
                   fill

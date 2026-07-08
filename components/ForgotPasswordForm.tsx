@@ -3,47 +3,35 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { useMutation } from "@/lib/apollo/hooks"
+import { FORGOT_PASSWORD_MUTATION } from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
 
 export default function ForgotPasswordForm() {
   const router = useRouter()
 
   const [email, setEmail] = useState("")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+
+  const [forgotPassword, { loading }] = useMutation(FORGOT_PASSWORD_MUTATION)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
     setSuccess("")
-    setLoading(true)
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/forgot-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email }),
-        }
-      )
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || "Something went wrong")
-        return
-      }
+      await forgotPassword({
+        variables: { input: { email } },
+      })
 
       setSuccess("OTP sent to your email.")
       setTimeout(() => {
         router.push(`/reset-password?email=${email}`)
       }, 1500)
-
-    } catch {
-      setError("Request failed")
-    } finally {
-      setLoading(false)
+    } catch (err) {
+      setError(getGraphQLErrorMessage(err))
     }
   }
 

@@ -3,6 +3,9 @@
 import { useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
+import { useMutation } from "@/lib/apollo/hooks"
+import { RESET_PASSWORD_MUTATION } from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
 
 export default function ResetPasswordForm() {
   const router = useRouter()
@@ -12,42 +15,27 @@ export default function ResetPasswordForm() {
 
   const [otp, setOtp] = useState("")
   const [newPassword, setNewPassword] = useState("")
-  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
+
+  const [resetPassword, { loading }] = useMutation(RESET_PASSWORD_MUTATION)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError("")
-    setLoading(true)
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/auth/reset-password`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email, otp, newPassword }),
-        }
-      )
-
-      const data = await res.json()
-
-      if (!res.ok) {
-        setError(data.error || "Reset failed")
-        return
-      }
+      await resetPassword({
+        variables: { input: { email, otp, newPassword } },
+      })
 
       setSuccess("Password reset successful!")
 
       setTimeout(() => {
         router.push("/login")
       }, 1500)
-
-    } catch {
-      setError("Something went wrong")
-    } finally {
-      setLoading(false)
+    } catch (err) {
+      setError(getGraphQLErrorMessage(err))
     }
   }
 

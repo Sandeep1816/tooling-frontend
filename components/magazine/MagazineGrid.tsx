@@ -1,10 +1,11 @@
 "use client"
 import Image from "next/image"
-import { useEffect, useState } from "react"
+import { useQuery } from "@/lib/apollo/hooks"
 import Link from "next/link"
+import { MAGAZINES_QUERY } from "@/lib/graphql/operations"
 
 type Magazine = {
-  id: number
+  id: string
   title: string
   slug: string
   coverImageUrl?: string
@@ -24,26 +25,17 @@ export default function MagazineGrid({
   showTitle = true,
   variant = "grid",
 }: Props) {
+  const { data, loading: queryLoading } = useQuery(MAGAZINES_QUERY, {
+    skip: !!initialMagazines,
+  })
 
-  const [magazines, setMagazines] = useState<Magazine[]>(initialMagazines || [])
-  const [loading, setLoading] = useState(!initialMagazines)
-
-  useEffect(() => {
-    if (!initialMagazines) {
-      fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/magazines`)
-        .then(res => res.json())
-        .then(data => {
-          setMagazines(data)
-          setLoading(false)
-        })
-    }
-  }, [initialMagazines])
+  const magazines: Magazine[] = initialMagazines ?? data?.magazines ?? []
+  const loading = !initialMagazines && queryLoading
 
   if (loading) return <p>Loading...</p>
 
   const displayMagazines = limit ? magazines.slice(0, limit) : magazines
 
-  /* ================= FEATURED VERSION ================= */
   if (variant === "featured" && displayMagazines.length > 0) {
     const mag = displayMagazines[0]
 
@@ -53,18 +45,18 @@ export default function MagazineGrid({
           Latest Issue
         </h2>
 
-       <Link href={`/magazines/${mag.slug}`}>
-  <div className="relative w-[220px] h-[300px] mb-6">
-    <Image
-      src={mag.coverImageUrl || "/placeholder.svg"}
-      alt={mag.title}
-      fill
-      priority
-      className="object-contain shadow-xl cursor-pointer"
-      sizes="220px"
-    />
-  </div>
-</Link>
+        <Link href={`/magazines/${mag.slug}`}>
+          <div className="relative w-[220px] h-[300px] mb-6">
+            <Image
+              src={mag.coverImageUrl || "/placeholder.svg"}
+              alt={mag.title}
+              fill
+              priority
+              className="object-contain shadow-xl cursor-pointer"
+              sizes="220px"
+            />
+          </div>
+        </Link>
 
         <p className="text-[#003B5C] font-semibold mb-2">
           {mag.createdAt
@@ -82,28 +74,25 @@ export default function MagazineGrid({
     )
   }
 
-  /* ================= GRID VERSION ================= */
   return (
     <div className="space-y-8">
-      {showTitle && (
-        <h2 className="text-3xl font-bold">Digital Magazines</h2>
-      )}
+      {showTitle && <h2 className="text-3xl font-bold">Digital Magazines</h2>}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {displayMagazines.map((mag) => (
           <Link key={mag.id} href={`/magazines/${mag.slug}`}>
-            <div className=" overflow-hidden shadow hover:shadow-lg transition cursor-pointer">
+            <div className="overflow-hidden shadow hover:shadow-lg transition cursor-pointer">
               {mag.coverImageUrl && (
-  <div className="relative w-full h-64">
-    <Image
-      src={mag.coverImageUrl}
-      alt={mag.title}
-      fill
-      className="object-cover"
-      sizes="(max-width:768px) 100vw, 33vw"
-    />
-  </div>
-)}
+                <div className="relative w-full h-64">
+                  <Image
+                    src={mag.coverImageUrl}
+                    alt={mag.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width:768px) 100vw, 33vw"
+                  />
+                </div>
+              )}
               <div className="p-4">
                 <h3 className="font-semibold text-lg">{mag.title}</h3>
               </div>

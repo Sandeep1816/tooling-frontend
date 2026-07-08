@@ -1,47 +1,23 @@
 "use client"
 
-import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useParams } from "next/navigation"
+import { useQuery } from "@/lib/apollo/hooks"
 import { ArrowLeft, MapPin, Briefcase } from "lucide-react"
 import { useCandidateGuard } from "@/lib/useCandidateGuard"
-
-type Job = {
-  id: number
-  title: string
-  slug: string
-  location: string
-  employmentType: string
-  Company?: { name: string; slug: string }
-  companyName?: string
-}
+import { JOB_ALERT_MATCHES_QUERY } from "@/lib/graphql/operations"
 
 export default function AlertMatchesPage() {
   useCandidateGuard()
 
   const { id } = useParams<{ id: string }>()
-  const [jobs, setJobs] = useState<Job[]>([])
-  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function loadMatches() {
-      try {
-        const token = localStorage.getItem("token")
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/job-alerts/${id}/matches`,
-          { headers: { Authorization: `Bearer ${token}` } }
-        )
-        const data = await res.json()
-        if (Array.isArray(data)) setJobs(data)
-      } catch (err) {
-        console.error("Failed to load matches", err)
-      } finally {
-        setLoading(false)
-      }
-    }
+  const { data, loading } = useQuery(JOB_ALERT_MATCHES_QUERY, {
+    variables: { alertId: id },
+    skip: !id,
+  })
 
-    if (id) loadMatches()
-  }, [id])
+  const jobs = data?.jobAlertMatches ?? []
 
   if (loading) {
     return <div className="p-10">Loading matching jobs...</div>
@@ -67,14 +43,28 @@ export default function AlertMatchesPage() {
         )}
 
         <div className="space-y-4">
-          {jobs.map((job) => (
+          {jobs.map((job: {
+            id: string
+            title: string
+            slug: string
+            location: string
+            employmentType: string
+            company?: { name: string; slug: string }
+            companyName?: string
+          }) => (
             <div key={job.id} className="bg-white rounded-lg shadow-sm p-5">
-              <Link
-                href={`/company/${job.Company?.slug ?? ""}`}
-                className="font-semibold text-sm text-blue-600 hover:underline"
-              >
-                {job.Company?.name || job.companyName || "Company"}
-              </Link>
+              {job.company?.slug ? (
+                <Link
+                  href={`/company/${job.company.slug}`}
+                  className="font-semibold text-sm text-blue-600 hover:underline"
+                >
+                  {job.company?.name || job.companyName || "Company"}
+                </Link>
+              ) : (
+                <span className="font-semibold text-sm text-gray-700">
+                  {job.company?.name || job.companyName || "Company"}
+                </span>
+              )}
 
               <Link
                 href={`/jobs/${job.slug}`}

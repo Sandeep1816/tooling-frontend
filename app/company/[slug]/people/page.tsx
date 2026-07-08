@@ -2,37 +2,28 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useParams } from "next/navigation"
-import { MapPin, CheckCircle } from "lucide-react"
 import CompanyTabs from "@/components/company/CompanyTabs"
 import CompanyHeader from "@/components/company/CompanyHeader"
+import { useCompanyProfile } from "@/lib/company/useCompanyProfile"
 
 type Person = {
-  id: number
+  id: string
   username: string
-  fullName?: string
-  headline?: string
-  location?: string
-  avatarUrl?: string
+  fullName?: string | null
+  headline?: string | null
+  location?: string | null
+  avatarUrl?: string | null
   role?: string
-  relation: "team" | "follower"
-  followingSince?: string
-}
-
-type Company = {
-  id: number
-  name: string
-  slug: string
-  tagline?: string
-  logoUrl?: string
-  isVerified: boolean
-  followers: number
+  relation: string
+  followingSince?: string | null
 }
 
 function profileHref(person: Person) {
-  if (person.role === "candidate") return `/candidate/${person.username}`
-  if (person.role === "recruiter") return `/recruiter/${person.username}`
+  const role = String(person.role).toLowerCase()
+  if (role === "candidate") return `/candidate/${person.username}`
+  if (role === "recruiter") return `/recruiter/${person.username}`
   return `/candidate/${person.username}`
 }
 
@@ -95,102 +86,15 @@ function FollowerCard({ person }: { person: Person }) {
 
 export default function CompanyPeoplePage() {
   const { slug } = useParams<{ slug: string }>()
-  const [company, setCompany] = useState<Company | null>(null)
-  const [people, setPeople] = useState<Person[]>([])
-  const [loading, setLoading] = useState(true)
-  const [following, setFollowing] = useState(false)
+  const { company, loading, following, toggleFollow } = useCompanyProfile(slug)
   const [showAllFollowers, setShowAllFollowers] = useState(false)
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const [companyRes, peopleRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${slug}`),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/companies/${slug}/people`),
-        ])
-
-        if (companyRes.ok) {
-          const data = await companyRes.json()
-          setCompany(data)
-
-          // Check if user is following this company
-          const token = localStorage.getItem("token")
-          if (token && data.id) {
-            const followStatusRes = await fetch(
-              `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${data.id}/follow-status`,
-              {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-            if (followStatusRes.ok) {
-              const statusData = await followStatusRes.json();
-              setFollowing(statusData.isFollowing);
-            }
-          }
-        }
-        if (peopleRes.ok) {
-          const data = await peopleRes.json()
-          setPeople(Array.isArray(data) ? data : [])
-        }
-      } catch (err) {
-        console.error(err)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (slug) load()
-  }, [slug])
-
-  async function toggleFollow() {
-    if (!company) return;
-
-    const token = localStorage.getItem("token");
-    if (!token) {
-      alert("Login required");
-      return;
-    }
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/follow`,
-        {
-          method: following ? "DELETE" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      if (response.ok) {
-        setFollowing(!following);
-        setCompany((prev) =>
-          prev
-            ? {
-                ...prev,
-                followers: following ? prev.followers - 1 : prev.followers + 1,
-              }
-            : prev
-        );
-      } else if (response.status === 409) {
-        setFollowing(true);
-      } else {
-        const errorData = await response.json();
-        alert(errorData.error || "Action failed");
-      }
-    } catch (error) {
-      console.error("Follow toggle error:", error);
-      alert("An error occurred");
-    }
-  }
 
   if (loading) return <div className="p-10">Loading…</div>
   if (!company) return <div className="p-10 text-center">Company not found</div>
 
+  const people: Person[] = company.people ?? []
   const followers = people.filter(
-    (p) => p.relation === "follower"
+    (p) => String(p.relation).toLowerCase() === "follower"
   )
 
   const displayedFollowers = showAllFollowers

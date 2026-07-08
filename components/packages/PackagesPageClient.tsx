@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useQuery } from "@/lib/apollo/hooks";
 import { Check, Loader2, X } from "lucide-react";
+import { MY_PACKAGE_INFO_QUERY } from "@/lib/graphql/operations";
 import PackagesHero from "./PackagesHero";
 import {
   activateFreePlan,
@@ -148,34 +150,19 @@ function PayButton({
 export default function PackagesPageClient() {
   const planKeys: PlanTier[] = ["free", "basic", "professional", "enterprise"];
   const bannerDurations = ["monthly", "quarterly", "annual"] as const;
-  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
-  const [recruitmentExpiresAt, setRecruitmentExpiresAt] = useState<string | null>(null);
+  const [hasToken, setHasToken] = useState(false);
 
   useEffect(() => {
-    async function loadCurrentPlan() {
-      const token = localStorage.getItem("token");
-      if (!token) return;
-
-      try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/payments/my-packages`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
-          }
-        );
-
-        if (res.ok) {
-          const data = await res.json();
-          setCurrentPlan(data.subscription?.plan ?? null);
-          setRecruitmentExpiresAt(data.subscription?.recruitmentExpiresAt ?? null);
-        }
-      } catch {
-        // ignore — user may not be logged in
-      }
-    }
-
-    loadCurrentPlan();
+    setHasToken(!!localStorage.getItem("token"));
   }, []);
+
+  const { data: packageData } = useQuery(MY_PACKAGE_INFO_QUERY, {
+    skip: !hasToken,
+  });
+
+  const currentPlan = packageData?.myPackageInfo?.subscription?.plan ?? null;
+  const recruitmentExpiresAt =
+    packageData?.myPackageInfo?.subscription?.recruitmentExpiresAt ?? null;
 
   return (
     <main className="w-full bg-white">

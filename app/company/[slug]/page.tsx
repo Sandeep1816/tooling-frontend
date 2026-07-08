@@ -1,127 +1,16 @@
 "use client"
-import Image from "next/image"
-import React, { useEffect, useState } from "react"
 import Link from "next/link"
-import { MapPin, Briefcase, CheckCircle } from "lucide-react"
+import React from "react"
+import { Briefcase } from "lucide-react"
 import CompanyTabs from "@/components/company/CompanyTabs"
 import CompanyHeader from "@/components/company/CompanyHeader"
-
-type Job = {
-  id: number
-  title: string
-  slug: string
-  location: string
-  employmentType: string
-}
-
-type Company = {
-  id: number
-  name: string
-  slug: string
-  tagline?: string
-  description?: string
-  industry?: string
-  location?: string
-  companySize?: string
-  website?: string
-  logoUrl?: string
-  coverImageUrl?: string
-  followers: number
-  isVerified: boolean
-  jobs: Job[]
-}
+import { useCompanyProfile } from "@/lib/company/useCompanyProfile"
 
 export default function CompanyProfilePage(props: {
   params: Promise<{ slug: string }>
 }) {
   const { slug } = React.use(props.params)
-
-  const [company, setCompany] = useState<Company | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [following, setFollowing] = useState(false)
-
-  useEffect(() => {
-    const fetchCompanyAndFollowStatus = async () => {
-      try {
-        // Fetch company details
-        const companyRes = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${slug}`
-        )
-        const companyData = await companyRes.json()
-        setCompany(companyData)
-
-        // Check if user is following this company
-        const token = localStorage.getItem("token")
-        if (token && companyData.id) {
-          const followStatusRes = await fetch(
-            `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${companyData.id}/follow-status`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          )
-          
-          if (followStatusRes.ok) {
-            const statusData = await followStatusRes.json()
-            setFollowing(statusData.isFollowing)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching company data:", error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchCompanyAndFollowStatus()
-  }, [slug])
-
-  async function toggleFollow() {
-    if (!company) return
-
-    const token = localStorage.getItem("token")
-    if (!token) {
-      alert("Login required")
-      return
-    }
-
-    try {
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/companies/${company.id}/follow`,
-        {
-          method: following ? "DELETE" : "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      )
-
-      if (response.ok) {
-        // Toggle the following state
-        setFollowing(!following)
-        setCompany((prev) =>
-          prev
-            ? {
-                ...prev,
-                followers: following
-                  ? prev.followers - 1
-                  : prev.followers + 1,
-              }
-            : prev
-        )
-      } else if (response.status === 409) {
-        // Already following - just update the state
-        setFollowing(true)
-      } else {
-        const errorData = await response.json()
-        alert(errorData.error || "Action failed")
-      }
-    } catch (error) {
-      console.error("Follow toggle error:", error)
-      alert("An error occurred")
-    }
-  }
+  const { company, loading, following, toggleFollow } = useCompanyProfile(slug)
 
   if (loading) return <div className="p-10">Loading…</div>
   if (!company) return <div className="p-10 text-center">Company not found</div>
@@ -130,7 +19,6 @@ export default function CompanyProfilePage(props: {
     <div className="bg-[#f3f2ef] min-h-screen">
       <div className="max-w-[1128px] mx-auto px-4 py-6 space-y-6">
 
-        {/* ================= HEADER ================= */}
         <CompanyHeader 
           company={company}
           isFollowing={following}
@@ -139,7 +27,6 @@ export default function CompanyProfilePage(props: {
 
         <CompanyTabs slug={company.slug} active="home" />
 
-        {/* ================= JOBS ================= */}
         <div className="bg-white rounded-lg p-6 shadow-sm">
           <h2 className="font-semibold mb-4">Jobs</h2>
 
@@ -149,7 +36,13 @@ export default function CompanyProfilePage(props: {
             </p>
           ) : (
             <div className="space-y-4">
-              {(company.jobs ?? []).map((job) => (
+              {(company.jobs ?? []).map((job: {
+                id: string
+                title: string
+                slug: string
+                location: string
+                employmentType: string
+              }) => (
                 <Link
                   key={job.id}
                   href={`/jobs/${job.slug}`}

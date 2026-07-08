@@ -1,35 +1,25 @@
-// SupplierAds.tsx
 "use client"
 
-import { useEffect, useState } from "react"
+import { useQuery } from "@/lib/apollo/hooks"
 import Image from "next/image"
 import Link from "next/link"
+import { BANNERS_BY_PLACEMENT_QUERY } from "@/lib/graphql/operations"
+import { getBannerClickUrl } from "@/lib/graphql/server"
 
 type Banner = {
-  id: number
+  id: string
   title: string
   imageUrl: string
-  targetUrl?: string
+  targetUrl?: string | null
   placement: string
 }
 
 export default function SupplierAds() {
-  const [banners, setBanners] = useState<Banner[]>([])
+  const { data } = useQuery(BANNERS_BY_PLACEMENT_QUERY, {
+    variables: { placement: "SIDEBAR" },
+  })
 
-  useEffect(() => {
-    const fetchSidebarAds = async () => {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/banners?placement=SIDEBAR`
-      )
-      const data = await res.json();
-
-      console.log("SIDEBAR ADS:", data);
-
-      setBanners(Array.isArray(data) ? data.slice(0, 3) : []);
-    }
-
-    fetchSidebarAds()
-  }, [])
+  const banners: Banner[] = (data?.banners ?? []).slice(0, 3)
 
   return (
     <div className="space-y-6 sticky top-6">
@@ -40,14 +30,13 @@ export default function SupplierAds() {
   )
 }
 
-/* ---------- AD COMPONENT ---------- */
-
 function Ad({ ad }: { ad: Banner }) {
   return (
     <Link
-      href={ad.targetUrl || "#"}
+      href={getBannerClickUrl(ad.id)}
       className="block bg-white"
       target="_blank"
+      rel="noopener noreferrer"
     >
       <div
         className="relative overflow-hidden mx-auto"
@@ -60,47 +49,6 @@ function Ad({ ad }: { ad: Banner }) {
           sizes="300px"
           className="object-cover"
         />
-      </div>
-    </Link>
-  )
-}
-
-/* ---------- RECRUITER CTA AD ---------- */
-function RecruiterAd({ src }: { src: string }) {
-  return (
-    <Link
-      href="/signup?role=recruiter"
-      className="relative block group overflow-hidden"
-    >
-      <div
-        className="relative overflow-hidden mx-auto"
-        style={{ width: "300px", height: "250px" }}
-      >
-        {/* IMAGE */}
-        <Image
-          src={src}
-          alt="Hire Candidates"
-          fill
-          sizes="300px"
-          className="object-cover"
-        />
-
-        {/* DARK OVERLAY */}
-        <div className="absolute inset-0 bg-black/50 group-hover:bg-black/60 transition" />
-
-        {/* TEXT CONTENT */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-4">
-          <h3 className="text-white text-xl font-bold mb-2">
-            Hiring Talent?
-          </h3>
-          <p className="text-white/90 text-sm mb-4">
-            Register your company & post jobs
-          </p>
-
-          <span className="inline-block bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-semibold group-hover:bg-indigo-700 transition">
-            Hire Candidates
-          </span>
-        </div>
       </div>
     </Link>
   )

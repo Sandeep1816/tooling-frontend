@@ -3,7 +3,16 @@ import Image from "next/image"
 import { useEffect, useState, FormEvent, ChangeEvent } from "react"
 import { useRouter, useParams } from "next/navigation"
 import dynamic from "next/dynamic"
+import { useMutation, useQuery } from "@/lib/apollo/hooks"
 import "react-quill-new/dist/quill.snow.css"
+import {
+  AUTHORS_QUERY,
+  CATEGORIES_QUERY,
+  POST_BY_ID_QUERY,
+  UPDATE_POST_MUTATION,
+} from "@/lib/graphql/operations"
+import { getGraphQLErrorMessage } from "@/lib/auth/session"
+import { getUploadUrl } from "@/lib/graphql/server"
 
 /* ================= EDITOR (React 19 SAFE) ================= */
 const ReactQuill = dynamic(() => import("react-quill-new"), {
@@ -37,46 +46,43 @@ export default function EditPost() {
   const [message, setMessage] = useState("")
   const [uploading, setUploading] = useState(false)
 
-  /* ================= LOAD DATA ================= */
+  const { data: postData } = useQuery(POST_BY_ID_QUERY, {
+    variables: { id: String(id) },
+    skip: !id,
+  })
+  const { data: authorsData } = useQuery(AUTHORS_QUERY)
+  const { data: categoriesData } = useQuery(CATEGORIES_QUERY)
+  const [updatePost] = useMutation(UPDATE_POST_MUTATION)
+
   useEffect(() => {
-    async function load() {
-      try {
-        const [postRes, authorRes, categoryRes] = await Promise.all([
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/posts/${id}`),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/authors`),
-          fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/categories`),
-        ])
+    if (authorsData?.authors) setAuthors(authorsData.authors)
+  }, [authorsData])
 
-        const postJson = await postRes.json()
-        const post = postJson.data || postJson
+  useEffect(() => {
+    if (categoriesData?.categories) setCategories(categoriesData.categories)
+  }, [categoriesData])
 
-        setForm({
-          title: post.title || "",
-          slug: post.slug || "",
-          badge: post.badge || "",
-          imageUrl: post.imageUrl || "",
-          excerpt: post.excerpt || "",
-          content: post.content || "",
-          authorId: String(post.authorId || post.author?.id || ""),
-          categoryId: String(post.categoryId || post.category?.id || ""),
+  useEffect(() => {
+    const post = postData?.postById
+    if (!post) return
 
-          facebookUrl: post.facebookUrl || "",
-          linkedinUrl: post.linkedinUrl || "",
-          twitterUrl: post.twitterUrl || "",
-          youtubeUrl: post.youtubeUrl || "",
-          email: post.email || "",
-          whatsappNumber: post.whatsappNumber || "",
-        })
-
-        setAuthors((await authorRes.json()).data || [])
-        setCategories((await categoryRes.json()).data || [])
-      } catch {
-        setMessage("❌ Failed to load post")
-      }
-    }
-
-    if (id) load()
-  }, [id])
+    setForm({
+      title: post.title || "",
+      slug: post.slug || "",
+      badge: post.badge || "",
+      imageUrl: post.imageUrl || "",
+      excerpt: post.excerpt || "",
+      content: post.content || "",
+      authorId: String(post.authorId || post.author?.id || ""),
+      categoryId: String(post.categoryId || post.category?.id || ""),
+      facebookUrl: post.facebookUrl || "",
+      linkedinUrl: post.linkedinUrl || "",
+      twitterUrl: post.twitterUrl || "",
+      youtubeUrl: post.youtubeUrl || "",
+      email: post.email || "",
+      whatsappNumber: post.whatsappNumber || "",
+    })
+  }, [postData])
 
   /* ================= HANDLERS ================= */
   function handleTitleChange(e: ChangeEvent<HTMLInputElement>) {
@@ -106,10 +112,12 @@ export default function EditPost() {
       const fd = new FormData()
       fd.append("image", file)
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/upload`,
-        { method: "POST", body: fd }
-      )
+      const token = localStorage.getItem("token")
+      const res = await fetch(getUploadUrl(), {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      })
 
       const data = await res.json()
       if (res.ok) {
@@ -126,33 +134,23 @@ export default function EditPost() {
   /* ================= SUBMIT ================= */
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
-    const token = localStorage.getItem("token")
 
     try {
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/posts/${id}`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
+      await updatePost({
+        variables: {
+          id: String(id),
+          input: {
             ...form,
-            authorId: Number(form.authorId),
-            categoryId: Number(form.categoryId),
-          }),
-        }
-      )
+            authorId: form.authorId || null,
+            categoryId: form.categoryId || undefined,
+          },
+        },
+      })
 
-      if (res.ok) {
-        setMessage("✅ Post updated successfully!")
-        setTimeout(() => router.push("/admin/posts"), 1200)
-      } else {
-        setMessage("❌ Update failed")
-      }
-    } catch {
-      setMessage("❌ Network error")
+      setMessage("✅ Post updated successfully!")
+      setTimeout(() => router.push("/admin/posts"), 1200)
+    } catch (err) {
+      setMessage(`❌ ${getGraphQLErrorMessage(err)}`)
     }
   }
 

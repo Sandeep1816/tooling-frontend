@@ -1,18 +1,18 @@
 export type Author = {
-  id: number
+  id: string | number
   name: string
   bio?: string | null
   avatarUrl?: string | null
 }
 
 export type Category = {
-  id: number
+  id: string | number
   name: string
   slug: string
 }
 
 export type Post = {
-  id: number
+  id: string | number
   title: string
   slug: string
   excerpt?: string | null
@@ -30,7 +30,7 @@ export type Post = {
   author?: Author
   category?: Category
   Company?: {
-    id: number
+    id: string | number
     name: string
     slug?: string
     logoUrl?: string | null

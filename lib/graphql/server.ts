@@ -54,12 +54,24 @@ export async function graphqlRequest<T>(
     headers.Authorization = `Bearer ${options.token}`;
   }
 
-  const res = await fetch(getGraphqlUrl(), {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ query, variables }),
-    cache: options?.cache ?? "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(getGraphqlUrl(), {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, variables }),
+      cache: options?.cache ?? "no-store",
+    });
+  } catch (err) {
+    const url = getGraphqlUrl();
+    const message =
+      err instanceof TypeError
+        ? `Cannot reach GraphQL at ${url}. Start newsprk-graphql (npm run dev on port 4000).`
+        : err instanceof Error
+          ? err.message
+          : "Network request failed";
+    throw new Error(message);
+  }
 
   const json = (await res.json()) as GraphQLResponse<T>;
   if (json.errors?.length) {
